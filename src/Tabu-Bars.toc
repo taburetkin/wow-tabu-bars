@@ -1,7 +1,7 @@
 ## Interface: 11303
-## Title: Tabu-Bars
+## Title: <%= name %>
 ## Author: dimtabu
 ## Version: <%= version %>
-## SavedVariablesPerCharacter: TabuBarsData
+## SavedVariablesPerCharacter: <%= nametrunc %>Data
 
-Tabu-Bars.xml
+<%= name %>.xml

@@ -19,7 +19,11 @@ function createTask(destFolder, ...cbs) {
 	const toc = () => {
 		return src("src/Tabu-Bars.toc")
 		.pipe(modifyFile((content, path, file) => {
-			return _.template(content)({ version: pkg.version });
+			return _.template(content)({ 
+				version: pkg.version,
+				name: pkg.addonName,
+				nametrunc: pkg.addonName.replace(/\W/gm, '')
+			});
 		}))
 		.pipe(dest(destFolder + "/"));
 	};
