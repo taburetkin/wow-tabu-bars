@@ -1,0 +1,32 @@
+local A = Tabu:Addon(...);
+A:CreateLocale("ruRU", {
+	["Button options:"] = "Опции кнопки:",
+	["Add popup action bar"] = "Добавить всплывающую панель",
+	["Delete popup action bar"] = "Удалить всплывающую панель",
+	["Delete this button"] = "Удалить эту кнопку",
+	["Bar options:"] = "Опции панели:",
+	["Open bar settings"] = "Открыть настройки панели",
+	["Lock bar"] = "Закрепить панель",
+	["Unlock bar"] = "Разблокировать панель",
+	["Add button"] = "Добавить кнопку",
+	["Delete this bar"] = "Удалить эту панель",
+	["Buttons spacing"] = "Расстояние между кнопками",
+	["Bar padding"] = "Отступ внутри панели",
+	["Bar buttons size"] = "Размер кнопок",
+	["Bar buttons count in line"] = "Количество кнопок в ряду",
+	["Bar point offset horizontal"] = "Координата X",
+	["Bar point offset vertical"] = "Координата Y",
+	["Bar point"] = "Точка крепления панели",
+	["Bar grow"] = "Рост панели",
+	["Bar grow and side"] = "Сторона и рост панели",
+	["Save Changes"] = "Сохранить изменения",
+	["Close"] = "Закрыть",
+	["|cffffff00/tabubars|r for info"] = "|cffffff00/tabubars|r показать информационную панель",
+	["|cffffff00/tabubars add|r to add action bar"] = "|cffffff00/tabubars add|r для создания новой панели комманд",
+	["|cffffff00/tabubars wipeall|r to clean all data and restart the UI"] = "|cffffff00/tabubars wipeall|r полностью стирает все панели и кнопки и перезагружает интерфейс",
+	["Chat commands:"] = "Чат комманды:",
+	["Create bar"] = "Создать панель",
+	["Management:"] = "Управление:",
+	["Mouseover any action button on Tabu-Bars bar and click right button for opening context menu"] = "Наведите курсор на любою кнопку панели команд Tabu-Bars и кликните правой кнопкой, для открытия контекстного меню"
+
+});

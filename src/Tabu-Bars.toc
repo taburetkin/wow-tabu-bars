@@ -1,0 +1,7 @@
+## Interface: 11303
+## Title: Tabu-Bars
+## Author: dimtabu
+## Version: <%= version %>
+## SavedVariablesPerCharacter: TabuBarsData
+
+Tabu-Bars.xml

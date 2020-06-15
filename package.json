@@ -1,0 +1,19 @@
+{
+  "name": "tabu-bars",
+  "addonName": "Tabu-Bars",
+  "version": "1.0.1",
+  "description": "wow classic action bars addon",
+  "main": "index.js",
+  "author": "dimtabu",
+  "license": "MIT",
+  "devDependencies": {
+    "gulp": "^4.0.2",
+    "gulp-modify-file": "^1.0.1",
+    "gulp-sequence": "^1.0.0",
+    "underscore": "^1.10.2"
+  },
+  "scripts": {
+    "bld": "node gulp/build",
+    "pub": "node gulp/publish"
+  }
+}

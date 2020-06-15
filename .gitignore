@@ -1,0 +1,4 @@
+gulp/config.js
+publish
+node_modules
+yarn.lock
