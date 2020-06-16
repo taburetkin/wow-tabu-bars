@@ -2,6 +2,20 @@
 ## Title: <%= name %>
 ## Author: dimtabu
 ## Version: <%= version %>
+## Notes: A standalone Popup Action Bars addon
 ## SavedVariablesPerCharacter: <%= nametrunc %>Data
 
-<%= name %>.xml
+# modules
+Libs\Tabu\index.xml
+Libs\GetSpellCountFix\index.lua
+Locales\index.xml
+
+ui-elements.xml
+core.lua
+models.lua
+grows-utils.lua
+settings.lua
+bus.lua
+bar.lua
+button.lua
+Tabu-Bars.lua

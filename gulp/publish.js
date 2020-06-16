@@ -4,12 +4,10 @@ const { exec } = require('child_process');
 const task = require('./task');
 const p1 = path.resolve("publish");
 
-
-task("publish/test", cb => {
-	let archive = `${p1}\\${pkg.name}-v${pkg.version}.zip`;
-	let folder = p1 + '\\test';
-	let command = `tar -cvzf ${p1}\\${pkg.name}-v${pkg.version}.zip ${p1}\\test`;
-	command = `tar -a -c -f ${archive} ${folder}`
+const compiled = "publish/compiled"
+task(compiled, cb => {
+	let command = `tar -caf publish/${pkg.name}-v${pkg.version}.zip -C ${compiled} *`;
+	console.log(command);
 	exec(command, (e,s,o) => {
 		cb();
 	});

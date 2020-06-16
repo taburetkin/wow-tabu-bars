@@ -1,4 +1,4 @@
 gulp/config.js
-publish
+publish/compiled
 node_modules
 yarn.lock
