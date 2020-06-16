@@ -1,10 +1,15 @@
 const pkg = require("../package.json");
 const _ = require("underscore");
 const { src, dest, series }  = require("gulp");
-const modifyFile = require('gulp-modify-file')
-
+const modifyFile = require('gulp-modify-file');
+//const cleanDest = require("gulp-clean-dest");
+const del = require("del");
 
 function createTask(destFolder, ...cbs) {
+
+	const clean = () => {
+		return del([destFolder + '/**/*']);
+	}
 
 	const libs = () => {
 		return src(["../GetSpellCountFix/**/*", "../Tabu/**/*"], { base: "../../Tabu"})
@@ -27,7 +32,7 @@ function createTask(destFolder, ...cbs) {
 		}))
 		.pipe(dest(destFolder + "/"));
 	};
-	return series(libs, sources, toc, ...cbs);
+	return series(clean, libs, sources, toc, ...cbs);
 }
 
 

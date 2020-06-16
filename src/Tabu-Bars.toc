@@ -6,9 +6,7 @@
 ## SavedVariablesPerCharacter: <%= nametrunc %>Data
 
 # modules
-Libs\Tabu\index.xml
-Libs\GetSpellCountFix\index.lua
-Locales\index.xml
+embeds.xml
 
 ui-elements.xml
 core.lua

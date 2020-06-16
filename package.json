@@ -6,6 +6,7 @@
   "author": "dimtabu",
   "license": "MIT",
   "devDependencies": {
+    "del": "^5.1.0",
     "gulp": "^4.0.2",
     "gulp-modify-file": "^1.0.1",
     "underscore": "^1.10.2"
