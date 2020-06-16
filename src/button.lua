@@ -645,6 +645,29 @@ local ButtonMixin = {
 }
 
 
+A.Button.Empty = function()
+	return {
+		type = nil,
+		typeName = nil,
+		attrs = { ["*type1"] = "" },
+		info = { icon = EMPTYSLOT }
+	}
+end
+
+A.Button.SpellButtonProto = function(id, arg)
+	local sa, sb = GetSpellBookItemInfo(id, arg);
+	info = _.GetSpellInfoTable(sb);
+	return {
+		type = "spell",
+		typeName = info.name,
+		attrs = {
+			["*type1"] = "spell",
+			spell = info.name,
+			entity_id = info.id,
+		},
+		info = info
+	};
+end
 
 A.Button.ToModel = function (button)
 	if (button == nil) then

@@ -2,10 +2,20 @@ const pkg = require("../package.json");
 const _ = require("underscore");
 const { src, dest, series }  = require("gulp");
 const modifyFile = require('gulp-modify-file');
-//const cleanDest = require("gulp-clean-dest");
 const del = require("del");
 
-function createTask(destFolder, ...cbs) {
+const flagsEnum = {
+	clean: 1,
+	libs: 2,
+	sources: 4,
+	toc: 8,
+}
+
+flagsEnum.all = flagsEnum.clean | flagsEnum.libs | flagsEnum.sources | flagsEnum.toc;
+
+function createTask(destFolder, flags, ...cbs) {
+
+	flags = flags | 255;
 
 	const clean = () => {
 		return del([destFolder + '/**/*']);
@@ -32,9 +42,30 @@ function createTask(destFolder, ...cbs) {
 		}))
 		.pipe(dest(destFolder + "/"));
 	};
-	return series(clean, libs, sources, toc, ...cbs);
+
+	let arr = [];
+
+	if ((flags & flagsEnum.clean) == flagsEnum.clean) {
+		arr.push(clean);
+	}
+
+	if ((flags & flagsEnum.libs) == flagsEnum.libs) {
+		arr.push(libs);
+	}
+
+	if ((flags & flagsEnum.sources) == flagsEnum.sources) {
+		arr.push(sources);
+	}
+
+	if ((flags & flagsEnum.toc) == flagsEnum.toc) {
+		arr.push(toc);
+	}
+	arr.push(...cbs);
+
+	return series(...arr);
 }
 
 
-module.exports = createTask;
+module.exports.create = createTask;
+module.exports.enums = flagsEnum;
 

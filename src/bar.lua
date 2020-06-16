@@ -317,10 +317,30 @@ local BarMixin = {
 	--#endregion
 
 	--#region Buttons
+	GetAutomaticButtons = function(self)
+		local bar = self.item;
+		local type = bar.automatic.type;
+		if (type == "SpellBook") then
+			return A.Bar.SpellBookTabsButtons(self);
+		elseif (type == "SpellBookTab") then
+			return A.Bar.SpellBookTabSpellsButtons(self);
+		else
+			_.print("unknown automatic bar", type);
+		end
+		return {};
+	end,
+	GetButtons = function(self)
+		local bar = self.item;
+		if (not bar.automatic) then
+			return bar.buttons or {};
+		end
+		return self:GetAutomaticButtons();
+	end,
 	BuildButtons = function (self, iteration)
 		local bar = self.item;
 
-		local btns = bar.buttons or {};
+		local btns = self:GetButtons();
+
 		table.sort(btns, function(a,b) return (a.index or 1000) < (b.index or 1000) end);
 
 		local index = 0;
@@ -447,7 +467,7 @@ A.Bar.Build = function (bar, index)
 	return model.item;
 end
 
-local NewBar = function(buttonId)
+local NewBar = function(buttonId, rawBar)
 	local button, isNested;
 	if (type(buttonId) == "table") then
 		button = buttonId;
@@ -456,25 +476,32 @@ local NewBar = function(buttonId)
 	local rawId = _.uniqueId();
 	local id = "Br"..rawId;
 	isNested = buttonId ~= nil;
-	local btn = {
+	local bar = {
 		id = id,
 		rawId = rawId,
 		parentButtonId = buttonId,
 		isNested = isNested,
 		buttons = {};
 	}
-	return btn;
+	if (rawBar) then
+		_.mixin(bar, rawBar);
+	end
+	return bar;
 end
 
-A.Bar.NewBar = function(btnModel)
+A.Bar.NewBar = function(btnModel, rawBar)
 	local btn = btnModel and btnModel.item or nil;
-	local bar = NewBar(btn);
+	local bar = NewBar(btn, rawBar);
 	local model = A.Bar.ToModel(bar);
-	model:AddButton(true);
+	if (not bar.automatic) then
+		model:AddButton(true);
+	end
 	if (not btnModel) then
 		model:Rebuild();
 		A.Bar.UpdateButtonsRefs();
-		Cache().bars[model.item.id] = model.item;
+		if (not bar.virtual) then
+			Cache().bars[model.item.id] = model.item;
+		end
 	end
 	return model;
 end
@@ -483,8 +510,8 @@ A.Bar.BuildAll = function()
 	local index = 1;
 	local dictionary = Cache().bars;
 	for name, bar in pairs(dictionary) do	
-		A.Bar.Build(bar, nil, index);
-		index = index + 1;
+		bar = A.Bar.Build(bar, nil, index);
+		index = index + 1;	
 	end
 	A.Bar.UpdateButtonsRefs();
 end
@@ -553,6 +580,7 @@ end
 A.Bar.UpdateButtonsRefs = function(data, parentPopups)
 	if (not data) then
 		data = Cache().bars;
+			
 	end
 	local initial = not parentPopups;
 
@@ -627,13 +655,77 @@ local function RefreshBarButtons(bar)
 		end
 	end
 end
+
 local function RefreshButtons()
-	for x, bar in pairs(Cache().bars) do
+	local db = Cache().bars;
+	for x, bar in pairs(db) do
 		RefreshBarButtons(bar);
 	end
+
 end
+
 A.Bar.RefreshButtonsOn = function(events)
 	for x, event in pairs(events) do
 		A.Bus.On(event, RefreshButtons);
 	end
+end
+
+A.Bar.SpellBookTabSpellsButtons = function(barModel)
+	local bar = barModel.item;
+	local auto = bar.automatic;
+	local btns = {};
+	local offset = auto.offset;
+	local numSpells = auto.spellsCount;
+
+	for s = offset + 1, offset + numSpells do
+
+		local proto = A.Button.SpellButtonProto(s, BOOKTYPE_SPELL);
+		local btn = {
+			id = "SpellButton"..proto.info.id,
+			barId = bar.id,
+		}
+		_.mixin(btn, proto);
+
+		table.insert(btns, btn);
+		-- DEFAULT_CHAT_FRAME:AddMessage(name..": "..spell);
+	end
+
+	return btns;
+end
+
+A.Bar.SpellBookTabsButtons = function(barModel)
+	local btns = {};
+	for i = 1, MAX_SKILLLINE_TABS do
+		local name, texture, offset, spellsCount = GetSpellTabInfo(i);
+
+		if not name then
+		   break;
+		end
+		local btn = A.Button.Empty();
+		btn.id = "SpellBookTabButton"..offset;
+		btn.barId = barModel.item.id;
+		btn.info.icon = texture;
+		btn.bar = {
+			id = "SpellBookTabBar"..offset,
+			parentButtonId = btn.id,
+			isNested = true,
+			automatic = {
+				type = "SpellBookTab",
+				offset = offset,
+				spellsCount = spellsCount
+			}
+		}
+		table.insert(btns, btn);
+		-- for s = offset + 1, offset + numSpells do
+		--    local	spell, rank = GetSpellName(s, BOOKTYPE_SPELL);
+		   
+		--    if rank then
+		-- 	   spell = spell.." "..rank;
+		--    end
+		   
+		--    DEFAULT_CHAT_FRAME:AddMessage(name..": "..spell);
+		-- end
+	 end	
+
+	 return btns;
 end

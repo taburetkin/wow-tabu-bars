@@ -1,15 +1,24 @@
 local A, _, L, Cache = Tabu:Spread(...);
 
 local function tabubarsSlashProcessor(type)
+	local subtype;
 	if (type == "" or type == nil) then
 		type = "info"
 	end
+
+	local type, subtype = strsplit(" ", type);
 
 	if (type == "add") then
 		A.Bar.NewBar();
 	elseif (type == "wipeall") then
 		wipe(Cache());
 		ReloadUI();
+	elseif (type == "wipe") then
+		if (subtype) then
+			Cache().bars[subtype] = nil;
+		else
+			_.print("Wrong command use", type);
+		end
 	elseif (type == "dump") then
 		Tabu.dump(Cache());
 	elseif (type == "info") then
@@ -78,6 +87,33 @@ local function initialize()
 	A.Bar.RefreshButtonsOn(refreshButtonEvents);
 	_.print(L(chatCommands[1]));
 	_.print(L(chatCommands[2]));
+
+	--A.specialBars();
+
+end
+
+A.specialBars = function()
+	_.print("okey. now specials begin")
+	A.spellBookBar();
+end
+
+A.spellBookBar = function()
+	if (Cache().bars["SpellBookBar"]) then 
+		_.print("SpellBook exist. done");
+		return 
+	end;
+
+	raw = {
+		id = "SpellBookBar",
+		special = true,
+		automatic = {
+			type = "SpellBook"
+		},		
+		point = "LEFT",
+		posX = 100,
+		posY = 200,
+	}
+	A.Bar.NewBar(nil, raw);
 end
 
 
