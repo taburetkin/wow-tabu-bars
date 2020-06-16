@@ -645,14 +645,15 @@ end
 local function RefreshBarButtons(bar)
 	for x, button in pairs(bar.buttons or {}) do
 		local model = A.Button.ToModel(button);
-		if (model.item.useFirstAvailable) then
-			model:SetupButtonFrame();	
-		end
+		-- if (model.item.useFirstAvailable) then
+		-- 	model:SetupButtonFrame();	
+		-- end
+		
 		model:UpdateButtonFrame();
-
 		if (button.bar) then
 			RefreshBarButtons(button.bar);
 		end
+
 	end
 end
 

@@ -107,7 +107,7 @@ local ButtonFrameMixin = {
 			fontString:SetTextColor(1,1,1,1);
 		end
 		fontString:SetText(count or "");
-		self:SetAttribute("entity_count", count or "");
+		--self:SetAttribute("entity_count", count or "");
 	end,
 	ToggleCooldown = function(self, id, type, kind)
 		local frame = self;
@@ -125,10 +125,10 @@ local ButtonFrameMixin = {
 			start, duration, enabled = GetItemCooldown(id);			
 		end
 		if (start) then
-			self:SetAttribute("entity_cd", start > 0 and start or "");
+			--self:SetAttribute("entity_cd", start > 0 and start or "");
 			cd:SetCooldown(start, duration, 1);
 		else
-			self:SetAttribute("entity_cd", "");
+			--self:SetAttribute("entity_cd", "");
 			if (not id) then
 				cd:SetCooldown(0, 0);
 			end
@@ -193,6 +193,7 @@ local ButtonFrameMixin = {
 	end,
 
 	SetupAction = function(self, attrs, icon)
+		if (InCombatLockdown()) then return end;
 		local btn = self;
 		if (not attrs) then
 			attrs = {
@@ -272,6 +273,8 @@ local ButtonMixin = {
 				attrs.type1 = nil;
 			end
 
+			attrs = _.cloneTable(attrs);
+
 			if (button.type == "macro") then
 				local check = _.GetMacroInfoTable(button.info.id);
 				if (check.name ~= button.info.name) then
@@ -282,6 +285,11 @@ local ButtonMixin = {
 					button.attrs.entity_id = newid;
 					button.info.id = newid;
 				end
+			elseif (button.type == "spell") then
+				attrs["*helpbutton1"] = "heal1";
+				attrs["spell-heal1"] = attrs["*type1"];
+				attrs["alt-spell-heal1"] = attrs["*type1"];
+				attrs["alt-unit-heal1"] = attrs["player"];
 			end
 		end
 		btn:SetupAction(attrs, icon);
@@ -294,9 +302,9 @@ local ButtonMixin = {
 
 	UpdateButtonFrame = function (self)
 		local button = self.item;
-		if (self.item.useFirstAvailable and self.bestButton) then
-			button = self.bestButton;
-		end
+		-- if (self.item.useFirstAvailable and self.bestButton) then
+		-- 	button = self.bestButton;
+		-- end
 		if (not button) then return end;
 
 		local frame = self:GetButtonFrame();		
@@ -310,7 +318,7 @@ local ButtonMixin = {
 			updateSpellButtonFrame(button, frame);
 		elseif (button.type == "macro") then
 			updateMacroButtonFrame(button, frame);
-		else
+		-- else
 	
 		end
 	end,
@@ -533,7 +541,7 @@ local ButtonMixin = {
 
 	--#region Popup
 	SetupButtonPopupBehavior  = function (self)
-
+		if (InCombatLockdown()) then return end;
 		local buttonFrame = self:GetButtonFrame();
 		local popupFrame = self:GetPopupFrame();
 
@@ -735,7 +743,9 @@ A.Button.Build = function (button, index)
 		A.Bar.Build(button.bar);
 	end
 
-	model:SetupButtonFrame();
+	if (not InCombatLockdown()) then
+		model:SetupButtonFrame();
+	end
 	model:UpdateButtonFrame();
 	model:SetupButtonPopupBehavior();
 
