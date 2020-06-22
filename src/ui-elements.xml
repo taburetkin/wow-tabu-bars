@@ -21,11 +21,9 @@
 	</FontString>	
 	<Button name="TabuBars_Button" virtual="true" movable="true" hidden="true">
 		<Layers>
-			<Layer level="BACKGROUND">
-				<Texture name="$parentBg" parentKey="bgTexture" setAllPoints="true"/>
-			</Layer>
+			<Layer level="BACKGROUND"><Texture name="$parentBg" parentKey="bgTexture" setAllPoints="true"/></Layer>
 			<Layer level="ARTWORK">
-				<Texture name="$parentIcon" parentKey="icon" file="Interface\Buttons\UI-Quickslot" hidden="false" setAllPoints="true">
+				<Texture name="$parentIcon" parentKey="icon" hidden="false" setAllPoints="true">
 					<Anchors>
 						<Anchor point="TOPLEFT">
 							<Offset>
@@ -42,9 +40,8 @@
 				<Texture name="$parentFlash" parentKey="flashTexture" file="Interface\Buttons\UI-QuickslotRed" hidden="true" setAllPoints="true"/>
 			</Layer>
 			<Layer level="OVERLAY">
-				<Texture name="$parentSolidOverlay" parentKey="bgOverlay" setAllPoints="true" />
-				<FontString name="$parentHotKey" parentKey="hotKeyText" inherits="TabuBars_SmallFontTemplate" justifyH="LEFT">
-	
+				<Texture name="$parentSolidOverlay" parentKey="bgOverlay" setAllPoints="true" hidden="true" />
+				<FontString name="$parentHotKey" parentKey="hotKeyText" inherits="TabuBars_SmallFontTemplate" justifyH="LEFT">	
 					<Anchors>
 						<Anchor point="TOPLEFT">
 							<Offset>
@@ -71,13 +68,35 @@
 						</Anchor>
 					</Anchors>
 				</FontString>
-				<Texture name="$parentBorder" parentKey="borderTexture" file="Interface\Buttons\UI-ActionButton-Border" hidden="true" alphaMode="ADD">
+				<FontString name="$parentTwoChars"  parentKey="twoChars" justifyH="LEFT" font="Interface\AddOns\Tabu-Bars\Fonts\ContinuumMedium.TTF" outline="THICK">
+					<FontHeight>
+						<AbsValue val="12"/>
+					</FontHeight>
 					<Anchors>
-						<Anchor point="CENTER">
+						<Anchor point="BOTTOMLEFT">
+							<Offset>
+								<AbsDimension x="2" y="2"/>
+							</Offset>
+						</Anchor>
+					</Anchors>
+				</FontString>				
+				<Texture name="$parentBorder" parentKey="borderTexture" file="Interface\Buttons\UI-ActionButton-Border" hidden="false" alphaMode="ADD" setAllPoints="true">
+					<Anchors>
+						<!-- <Anchor point="CENTER">
 							<Offset>
 								<AbsDimension x="0" y="0"/>
 							</Offset>
+						</Anchor> -->
+						<Anchor point="TOPLEFT">
+							<Offset>
+								<AbsDimension x="1" y="-1"/>
+							</Offset>
 						</Anchor>
+						<Anchor point="BOTTOMRIGHT">
+							<Offset>
+								<AbsDimension x="-1" y="1"/>
+							</Offset>
+						</Anchor>						
 					</Anchors>
 				</Texture>
 			</Layer>

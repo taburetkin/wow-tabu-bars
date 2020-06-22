@@ -168,7 +168,7 @@ local BarMixin = {
 		frame:EnableMouse(true);
 		frame:SetFrameLevel(UIParent:GetFrameLevel() + 2);
 		frame:SetSize(1, 1);
-		_.createColorTexture(frame, 0,0,0, 0.8);	
+		frame.bg = _.createColorTexture(frame, 0,0,0, 0);
 
 		frame:CreateSecureBg(bar.id);
 
@@ -182,7 +182,15 @@ local BarMixin = {
 		end
 
 	end,
+	SetupLook = function(self)
+		local bar = self.item;
+		local frame = self:GetBarFrame();
+		local parent = self:GetParentBarBar();
 
+		local bg = bar.background or (parent and parent.background) or {0,0,0,.8};
+		frame.bg:SetColorTexture(unpack(bg));
+
+	end,
 	UpdateBarPosition = function (self)
 		local bar = self.item;
 		local frame = self:GetBarFrame();
@@ -250,13 +258,18 @@ local BarMixin = {
 
 	GetBarLinesAndItems = function (self)
 		local bar = self.item;
-		local btns = bar.buttons or {}
+		local btns = self:GetButtons(); --bar.buttons or {}
 		local items = 0;
+		local lastOne;
 		for _, b in pairs(btns) do
 			local buttonModel = A.Button.ToModel(b);
 			if (buttonModel:IsActive()) then
 				items = items + 1;
 			end
+			lastOne = buttonModel;
+		end
+		if (lastOne:IsHidden()) then
+			items = items - 1;
 		end
 		local lines = math.modf((items > 0 and items - 1 or 0) / bar.buttonsInLine) + 1;
 		if (items > bar.buttonsInLine) then
@@ -317,6 +330,12 @@ local BarMixin = {
 	--#endregion
 
 	--#region Buttons
+	IsNotAuto = function(self)
+		return not self.item.automatic;
+	end,
+	IsAuto = function(self)
+		return not self:IsNotAuto();
+	end,
 	GetAutomaticButtons = function(self)
 		local bar = self.item;
 		local type = bar.automatic.type;
@@ -331,11 +350,18 @@ local BarMixin = {
 	end,
 	GetButtons = function(self)
 		local bar = self.item;
-		if (not bar.automatic) then
+		if (self:IsNotAuto()) then
 			return bar.buttons or {};
 		end
 		return self:GetAutomaticButtons();
 	end,
+
+	SetButtons = function(self, buttons)
+		if (self:IsNotAuto()) then
+			self.item.buttons = buttons;
+		end
+	end,
+
 	BuildButtons = function (self, iteration)
 		local bar = self.item;
 
@@ -344,34 +370,92 @@ local BarMixin = {
 		table.sort(btns, function(a,b) return (a.index or 1000) < (b.index or 1000) end);
 
 		local index = 0;
+		local realIndex = 0;
 		self.buttonsCount = 0;
 		local newbtns = {};
+		self.lastButton = nil;
+		self.lastLineFirstButton = nil;
 		for _, button in pairs(btns) do
-			if (A.Button.Build(button, index)) then
+			realIndex = realIndex + 1;
+			button.index = realIndex;
+			local valid, btnModel, firstInLine = A.Button.Build(button, index);
+
+			if (valid) then
+				if (self.lastButton and self.lastButton:IsActive()) then
+					self.lastButton:Show();
+				end
+				self.lastButton = btnModel;
+				if (firstInLine) then
+					self.lastLineFirstButton = btnModel;
+				end
 				index = index + 1;
 				self.buttonsCount = index;
 				table.insert(newbtns, button);
 			end
 		end
-		bar.buttons = newbtns;
-		if (self.buttonsCount == 1 and self.prevButton.hidden) then
-			self.prevButton.hidden = false;
-			A.Button.ToModel(self.prevButton):GetButtonFrame():Show();
+		self:SetButtons(newbtns);
+		
+
+		-- fix stored bar data, should be removed in future
+		if (self.lastButton) then
+			self.lastButton.item.hidden = nil;
 		end
+
+		if (self.buttonsCount == 1) then
+			self.lastButton:Show();
+		elseif (self.buttonsCount > 1 and self.lastButton:IsEmpty()) then
+			self.lastButton:Hide();
+		end
+
 	end,
 
-	AddButton = function (self, silent, mixWith)
-		local btnModel = A.Button.NewButton(self.item);
+	AddButton = function (self, kind, raw)
+		if (self:IsAuto()) then return end;
+
+		local buttonsCount = self.buttonsCount;
 		if (not self.item.buttons) then
 			self.item.buttons = {}
+			buttonsCount = 0;
 		end
-		if (mixWith) then
-			_.mixin(btnModel.item, mixWith);
+		local buttons = self.item.buttons;
+
+		if (type(kind) == "table" or kind == nil) then
+			raw = kind;
+			kind = "add";
 		end
-		table.insert(self.item.buttons, btnModel.item);
-		if (not silent) then
+		if (raw) then
+			raw = A.Button.BuildAttributes(raw.type, raw.typeName);
+		end
+
+		local newbtn;
+
+		-- if (kind == "expand" or kind == "initial") then
+		-- 	newbtn = A.Button.NewButton(self.item);
+		-- 	table.insert(buttons, newbtn.item);			
+		-- else
+		if (kind == "add") then
+			if (buttonsCount <= 1 or not self.lastButton:IsEmpty()) then
+				newbtn = A.Button.NewButton(self.item);
+				_.mixin(newbtn.item, raw);
+				table.insert(buttons, newbtn.item);
+			else
+				if (raw) then
+					self.lastButton:Change(raw);
+				end
+			end
+		end
+		newbtn = A.Button.NewButton(self.item);
+		table.insert(buttons, newbtn.item);			
+
+		if (kind == "expand" or kind == "add") then
 			self:Rebuild();
 		end
+		
+	end,
+
+	AddSpecialButton = function(self, special)
+		local raw = _.cloneTable(special.proto, nil, "type", "typeName");
+		self:AddButton(raw);
 	end,
 
 	Rebuild = function(self)
@@ -397,22 +481,22 @@ local BarMixin = {
 	end,
 
 	TryExpand = function(self, btnModel)
-		if (self.prevButton == btnModel.item and btnModel.item.type) then
-			btnModel.item.hidden = false;
-			self:AddButton(nil, { hidden = true });
+		if (self.lastButton == btnModel and not btnModel:IsEmpty()) then
+			self:AddButton("expand");
 		end
 	end,
+
 	GetFirstAvailableButton = function(self)
 		local start, dur, en;
 		for x, button in ipairs(self.item.buttons) do
 			if (button.type) then
-				print(button.type, button.typeName);
+
 				if (button.type == "item") then
 					start, dur, en = GetItemCooldown(button.info.id)
 				elseif (button.type == "spell") then
 					start, dur, en = GetSpellCooldown(button.info.id)
 				end
-				print(button.typeName, start, dur, en);
+
 				if (not start or start == 0) then
 					return button;
 				end
@@ -420,6 +504,7 @@ local BarMixin = {
 		end
 		return {};
 	end,
+
 	GetFirstAvailableButtonData = function(self)
 		local btn = GetFirstAvailableButton() or self.item.buttons[1];
 		return btn.attrs, btn.info
@@ -460,6 +545,7 @@ A.Bar.Build = function (bar, index)
 
 	model:SetBarDefaults();
 	model:InitializeBarFrame();
+	model:SetupLook();
 	model:BuildButtons();
 	model:ResizeBar();
 	model:UpdateBarPosition();
@@ -492,9 +578,15 @@ end
 A.Bar.NewBar = function(btnModel, rawBar)
 	local btn = btnModel and btnModel.item or nil;
 	local bar = NewBar(btn, rawBar);
+
 	local model = A.Bar.ToModel(bar);
-	if (not bar.automatic) then
-		model:AddButton(true);
+	local x = {
+		bar = bar,
+		model = model
+	}
+
+	if (model:IsNotAuto()) then
+		model:AddButton("initial");
 	end
 	if (not btnModel) then
 		model:Rebuild();
@@ -506,9 +598,35 @@ A.Bar.NewBar = function(btnModel, rawBar)
 	return model;
 end
 
+
+-- local initBarItemButtons = function(bar)
+-- 	local requestSended;
+-- 	if not bar.buttons then return end;
+-- 	for x,button in pairs(bar.buttons) do
+-- 		if (button.type == "item" or button.type == "Item") then
+-- 			GetItemInfo(button.typeName);
+-- 			requestSended = true;
+-- 		end
+-- 		if (button.bar) then
+-- 			requestSended = requestSended or initBarItemButtons(button.bar);
+-- 		end
+-- 	end
+-- 	return requestSended;
+-- end
+
+-- A.Bar.initializeItems = function()
+-- 	local requestSended;
+-- 	local bars = Cache().bars;
+-- 	if (not bars) then return end;
+-- 	for x, bar in pairs() do
+-- 		requestSended = requestSended or initBarItemButtons(bar);
+-- 	end
+-- end
+
 A.Bar.BuildAll = function()
 	local index = 1;
 	local dictionary = Cache().bars;
+
 	for name, bar in pairs(dictionary) do	
 		bar = A.Bar.Build(bar, nil, index);
 		index = index + 1;	
@@ -595,6 +713,15 @@ A.Bar.UpdateButtonsRefs = function(data, parentPopups)
 	end
 end
 
+local hideLastButton = function(button)
+end
+local markButtonAsLast = function(button)
+	local frame = button:GetButtonFrame();
+	if (frame) then
+		frame:Show();
+	end
+end
+
 
 local function showBarLastButton(bar)
 	if (not bar) then return end
@@ -603,14 +730,17 @@ local function showBarLastButton(bar)
 		showBarLastButton(btn.bar)
 	end
 	local model = A.Bar.ToModel(bar);
-	if (not model.prevButton) then return end
-	local btnModel = A.Button.ToModel(model.prevButton);
-	local frame = btnModel:GetButtonFrame();
-	if (frame) then
-		frame:Show();
-		model.prevButton.hidden = false;
-		model:ResizeBar();
-	end
+	if (not model.lastButton) then return end
+	model.lastButton:Show();
+	model:ResizeBar();
+
+	-- local btnModel = A.Button.ToModel(model.prevButton);
+	-- local frame = btnModel:GetButtonFrame();
+	-- if (frame) then
+	-- 	frame:Show();
+	-- 	model.prevButton.hidden = false;
+	-- 	model:ResizeBar();
+	-- end
 end
 
 local function hideBarLastButton(bar)
@@ -620,14 +750,18 @@ local function hideBarLastButton(bar)
 		hideBarLastButton(btn.bar)
 	end
 	local model =  A.Bar.ToModel(bar);
-	if (not model.prevButton or model.prevButton.type or model.buttonsCount <= 1) then return end
-	local btnModel = A.Button.ToModel(model.prevButton);
-	local frame = btnModel:GetButtonFrame();
-	if (frame) then
-		frame:Hide();
-		model.prevButton.hidden = true;
+	if (model.lastButton and model.buttonsCount > 1 and model.lastButton:IsEmpty()) then
+		model.lastButton:Hide();
 		model:ResizeBar();
 	end
+	-- if (not model.prevButton or model.prevButton.type or model.buttonsCount <= 1) then return end
+	-- local btnModel = A.Button.ToModel(model.prevButton);
+	-- local frame = btnModel:GetButtonFrame();
+	-- if (frame) then
+	-- 	frame:Hide();
+	-- 	model.prevButton.hidden = true;
+	-- 	model:ResizeBar();
+	-- end
 end
 
 A.Bar.ShowLastButtons = function ()
@@ -645,10 +779,6 @@ end
 local function RefreshBarButtons(bar)
 	for x, button in pairs(bar.buttons or {}) do
 		local model = A.Button.ToModel(button);
-		-- if (model.item.useFirstAvailable) then
-		-- 	model:SetupButtonFrame();	
-		-- end
-		
 		model:UpdateButtonFrame();
 		if (button.bar) then
 			RefreshBarButtons(button.bar);
@@ -671,62 +801,61 @@ A.Bar.RefreshButtonsOn = function(events)
 	end
 end
 
-A.Bar.SpellBookTabSpellsButtons = function(barModel)
-	local bar = barModel.item;
-	local auto = bar.automatic;
-	local btns = {};
-	local offset = auto.offset;
-	local numSpells = auto.spellsCount;
+-- A.Bar.SpellBookTabSpellsButtons = function(barModel)
+-- 	local bar = barModel.item;
+-- 	local auto = bar.automatic;
+-- 	local btns = {};
+-- 	local offset = auto.offset;
+-- 	local numSpells = auto.spellsCount;
 
-	for s = offset + 1, offset + numSpells do
+-- 	for s = offset + 1, offset + numSpells do
 
-		local proto = A.Button.SpellButtonProto(s, BOOKTYPE_SPELL);
-		local btn = {
-			id = "SpellButton"..proto.info.id,
-			barId = bar.id,
-		}
-		_.mixin(btn, proto);
+-- 		local proto = A.Button.SpellButtonProto(s, BOOKTYPE_SPELL);
+-- 		local btn = {
+-- 			id = "SpellButton"..proto.info.id,
+-- 			barId = bar.id,
+-- 		}
+-- 		_.mixin(btn, proto);
 
-		table.insert(btns, btn);
-		-- DEFAULT_CHAT_FRAME:AddMessage(name..": "..spell);
-	end
+-- 		table.insert(btns, btn);
+-- 	end
 
-	return btns;
-end
+-- 	return btns;
+-- end
 
-A.Bar.SpellBookTabsButtons = function(barModel)
-	local btns = {};
-	for i = 1, MAX_SKILLLINE_TABS do
-		local name, texture, offset, spellsCount = GetSpellTabInfo(i);
+-- A.Bar.SpellBookTabsButtons = function(barModel)
+-- 	local btns = {};
+-- 	for i = 1, MAX_SKILLLINE_TABS do
+-- 		local name, texture, offset, spellsCount = GetSpellTabInfo(i);
 
-		if not name then
-		   break;
-		end
-		local btn = A.Button.Empty();
-		btn.id = "SpellBookTabButton"..offset;
-		btn.barId = barModel.item.id;
-		btn.info.icon = texture;
-		btn.bar = {
-			id = "SpellBookTabBar"..offset,
-			parentButtonId = btn.id,
-			isNested = true,
-			automatic = {
-				type = "SpellBookTab",
-				offset = offset,
-				spellsCount = spellsCount
-			}
-		}
-		table.insert(btns, btn);
-		-- for s = offset + 1, offset + numSpells do
-		--    local	spell, rank = GetSpellName(s, BOOKTYPE_SPELL);
+-- 		if not name then
+-- 		   break;
+-- 		end
+-- 		local btn = A.Button.Empty();
+-- 		btn.id = "SpellBookTabButton"..offset;
+-- 		btn.barId = barModel.item.id;
+-- 		btn.info.icon = texture;
+-- 		btn.bar = {
+-- 			id = "SpellBookTabBar"..offset,
+-- 			parentButtonId = btn.id,
+-- 			isNested = true,
+-- 			automatic = {
+-- 				type = "SpellBookTab",
+-- 				offset = offset,
+-- 				spellsCount = spellsCount
+-- 			}
+-- 		}
+-- 		table.insert(btns, btn);
+-- 		-- for s = offset + 1, offset + numSpells do
+-- 		--    local	spell, rank = GetSpellName(s, BOOKTYPE_SPELL);
 		   
-		--    if rank then
-		-- 	   spell = spell.." "..rank;
-		--    end
+-- 		--    if rank then
+-- 		-- 	   spell = spell.." "..rank;
+-- 		--    end
 		   
-		--    DEFAULT_CHAT_FRAME:AddMessage(name..": "..spell);
-		-- end
-	 end	
+-- 		--    DEFAULT_CHAT_FRAME:AddMessage(name..": "..spell);
+-- 		-- end
+-- 	 end	
 
-	 return btns;
-end
+-- 	 return btns;
+-- end

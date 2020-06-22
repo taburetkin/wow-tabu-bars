@@ -82,9 +82,11 @@ local function initialize()
 	initializeSlashCommands();
 	_.initializeUniqueId();
 	initializeCache();
-
+	-- C_Timer.After(5, function() 
+	-- end)
 	A.Bar.BuildAll();
-	A.Bar.RefreshButtonsOn(refreshButtonEvents);
+	--A.Bar.RefreshButtonsOn(refreshButtonEvents);
+
 	_.print(L(chatCommands[1]));
 	_.print(L(chatCommands[2]));
 
@@ -120,4 +122,51 @@ end
 A.Bus.On("PLAYER_LOGIN", initialize);
 
 
+local MicroButtons = {
+"CharacterMicroButton",
+"SpellbookMicroButton",
+"TalentMicroButton",
+"QuestLogMicroButton",
+"SocialsMicroButton",
+"WorldMapMicroButton",
+"MainMenuMicroButton",
+"HelpMicroButton"
+}
 
+local noop = function() end;
+A.HideBlizMicroMenu = function()
+	for i, id in pairs(MicroButtons) do
+		local frame = _G[id];
+		frame.Show = noop;
+		frame:Hide();
+	end
+end
+
+A.hbmm = A.HideBlizMicroMenu;
+
+A.ShowBlizMicroMenu = function()
+	local prev;
+	for i, id in pairs(MicroButtons) do
+		local frame = _G[id];
+		frame:SetParent(UIParent);
+		frame:ClearAllPoints();
+		if (not prev) then
+			frame:SetPoint("CENTER", -100, -100);
+		else
+			frame:SetPoint("TOPLEFT", prev, "TOPRIGHT", 5, 0);
+		end
+		frame:Show();
+
+		local width, height = frame:GetSize();
+		frame:SetHitRectInsets(0,0,0,0);
+		frame:SetSize(width * 3, height * 3);
+
+		prev = frame;
+	end	
+end
+
+A.sbmm = A.ShowBlizMicroMenu;
+
+--A.sbmm();
+-- HideMicroMenu = A.HideBlizMicroMenu;
+-- ShowMicroMenu = A.ShowBlizMicroMenu;

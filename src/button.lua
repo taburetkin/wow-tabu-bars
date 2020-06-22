@@ -27,14 +27,14 @@ local function updateSpellButtonFrame(button, frame)
 		return;
 	end
 
-	local count = _.getSpellCount(button.info.id);
-	frame:SetAmount(count);
+	local count, costType = _.getSpellCount(button.info.id);
+	frame:SetAmount(count, costType);
 	frame:ToggleCooldown(button.info.id, "Spell");
 
 	local command = "SPELL "..button.info.name;
 	local key = _.getSpellBindingKey(button.info.name, button.info.id);
 	frame:SetButtonHotKey(key);
-
+	frame:SetTwoChars("");
 end
 
 local function updateMacroButtonFrame(button, frame)
@@ -45,7 +45,7 @@ local function updateMacroButtonFrame(button, frame)
 	local count;
 	local thingId = GetMacroSpell(button.info.id);
 	local thingType = "Spell";
-
+	local costType;
 	if (not thingId) then
 		local iname = GetMacroItem(button.info.id);
 		if (iname) then
@@ -61,16 +61,17 @@ local function updateMacroButtonFrame(button, frame)
 
 	
 	if (thingType == "Spell") then 
-		count = _.getSpellCount(thingId);
+		count, costType = _.getSpellCount(thingId);
 	elseif (thingType == "Item") then
 		count = GetItemCount(thingId);
 	end
 
-	frame:SetAmount(count);
+	frame:SetAmount(count, costType);
 	frame:ToggleCooldown(thingId, thingType, "Macro");
 	local command = "MACRO "..button.info.name;
 	key = GetBindingKey(command);
 	frame:SetButtonHotKey(key);
+	frame:SetTwoChars("");
 end
 
 local function updateItemButtonFrame(button, frame)
@@ -79,6 +80,11 @@ local function updateItemButtonFrame(button, frame)
 	local count = GetItemCount(button.info.id);
 	frame:SetAmount(count);
 	frame:ToggleCooldown(button.info.id, "Item", "Item");
+	frame:SetTwoChars("");
+end
+
+local function updateSpecialButtonFrame(button, frame)
+	frame:SetTwoChars(button.info.twoChars);
 end
 
 local function cleanButtonFrame(button, frame)
@@ -88,52 +94,59 @@ local function cleanButtonFrame(button, frame)
 	frame:SetAmount("");
 	frame:SetButtonHotKey("");
 	frame:ToggleCooldown();
+	frame:SetTwoChars("");
 end
 
 
 
 
 local ButtonFrameMixin = {
-	SetAmount = function(self, count)
-		local frame = self;
-		local fontString = frame.countText;
-		if (count == 0) then
-			frame.bgOverlay:SetColorTexture(0, 0, 0, 0.7);
-			frame.bgOverlay:Show();
-			fontString:SetTextColor(1,0,0,1);
-		else
-			frame.bgOverlay:SetColorTexture(0, 0, 0, 0);
-			frame.bgOverlay:Hide();
-			fontString:SetTextColor(1,1,1,1);
-		end
-		fontString:SetText(count or "");
-		--self:SetAttribute("entity_count", count or "");
+	SetTwoChars = function(self, txt)
+		-- txt = txt or "";
+		-- self.twoChars:SetText(txt);
+		-- if (txt ~= "") then
+		-- 	local height = self:GetHeight();
+		-- 	self.twoChars:SetTextHeight(height * 0.5);
+		-- end
 	end,
-	ToggleCooldown = function(self, id, type, kind)
+
+	SetAmount = function(self, count, costType)
 		local frame = self;
-		local cd = frame.cooldownFrame;
-		if (id and type) then
-			cd:Show();
-		else
-			cd:Hide();
+		local fontString = frame.Count;
+
+		if (costType and costType ~= "MANA" and costType ~= "REAGENT") then
+			count = nil;
 		end
 
-		local start, duration, enabled;
-		if (id and type == "Spell") then
-			start, duration, enabled = GetSpellCooldown(id);
-		elseif (id and type == "Item") then
-			start, duration, enabled = GetItemCooldown(id);			
-		end
-		if (start) then
-			--self:SetAttribute("entity_cd", start > 0 and start or "");
-			cd:SetCooldown(start, duration, 1);
-		else
-			--self:SetAttribute("entity_cd", "");
-			if (not id) then
-				cd:SetCooldown(0, 0);
+		if (type(count) == "number" and count == 0) then
+			frame.bgOverlay:SetColorTexture(.01, 0, 0, .77);
+			fontString:SetTextColor(1,0,0,1);
+		elseif (type(count) == "number" and count > 0) then
+			frame.bgOverlay:SetColorTexture(.1, 0, 0, 0);
+			if (costType == "MANA") then
+				fontString:SetTextColor(0, .7, 1, 1);
+			else
+				fontString:SetTextColor(1,1,1,1);
 			end
+		else
+			frame.bgOverlay:SetColorTexture(.1, 0, 0, 0);
+			fontString:SetTextColor(1,1,1,1);
+		end
+		local fnt, fntsize = fontString:GetFont();
+		fontString:SetFont(fnt, fntsize, "THICKOUTLINE");
+		fontString:SetText(count or "");
+	end,
+
+	ToggleCooldown = function(self, id, type, kind)
+		local cd = self.cooldown;
+		local start, dur, enab = _.getCooldown(type, id);
+		if (start and start > 0) then
+			cd:SetCooldown(start, dur, enab);
+		else
+			cd:SetCooldown(0,0);
 		end
 	end,
+
 	SetButtonHotKey = function(self, key)
 		local frame = self;
 		local original = key;
@@ -149,11 +162,21 @@ local ButtonFrameMixin = {
 			key = key:gsub("MOUSEWHEELUP", "wU");
 			frame.hotKeyAssigned = original;
 		end
-	
-		frame.hotKeyText:SetText(key);
+
+		local f, h = frame.HotKey:GetFont();
+		-- frame.hotKeyText:SetFont("Fonts\\ARIALN.ttf", 10, "THICK");
+		frame.HotKey:SetTextColor(0,1,1,1);
+		frame.HotKey:SetFont(f,h, "THICKOUTLINE");
+		frame.HotKey:SetText(key);
+
 	end,
 	ShowButtonTooltip = function (self)
 		if (InCombatLockdown()) then return end;
+		if (self:GetAttribute("special")) then
+			return;
+		end
+		--if (self.special) then return end;
+
 		local atype = self:GetAttribute("*type1");
 		if (not atype or atype == "") then
 			return;
@@ -179,7 +202,7 @@ local ButtonFrameMixin = {
 			end
 		end
 
-		if (self.hotKeyAssigned) then
+		if (self.hotKeyAssigned and self.hotKeyAssigned ~= "") then
 			GameTooltip:AddLine("|cffff3000HotKey: |cffffffff"..self.hotKeyAssigned.."|r");
 		end
 		if (self.isNested) then
@@ -192,18 +215,47 @@ local ButtonFrameMixin = {
 		GameTooltip:Hide();
 	end,
 
+	SetupIcon = function(self, btn, shouldStop)
+		local info = btn.info or {};
+		local icon = info.icon;
+
+		if (btn.type ~= "special-button" and not icon) then
+			icon = EMPTYSLOT;
+		end
+
+		-- if (icon == EMPTYSLOT) then
+		-- 	icon = nil;
+		-- end
+
+		if (icon == false or icon == nil) then
+			self.icon:Hide();	
+		else
+			if (type(icon) == "function") then
+				icon(self.icon);
+			else
+				self.icon:Show();
+				self.icon:SetTexture(icon);
+			end	
+		end
+
+	end,
+
 	SetupAction = function(self, attrs, icon)
 		if (InCombatLockdown()) then return end;
 		local btn = self;
 		if (not attrs) then
-			attrs = {
-				["*type1"] = "";
-			}
+			attrs = A.Button.EmptyButtonAttributes()
 		end
 		for key, value in pairs(attrs) do
 			btn:SetAttribute(key, value);
 		end
-		btn.icon:SetTexture(icon or EMPTYSLOT);
+
+		-- local ic = [[Interface\Buttons\UI-MicroButton-Help-Up]];
+		-- ic = [[Interface\AddOns\Tabu-Bars\Media\Icons\UI-MicroButton-Help-Up]]
+		-- btn.icon:SetTexture(ic); --icon or EMPTYSLOT);
+		-- btn.icon:ClearAllPoints();
+		-- btn.icon:SetSize(40,60);
+		-- btn.icon:SetPoint("BOTTOMLEFT", 0, 5);
 	end
 	
 
@@ -213,6 +265,12 @@ local function CopyButton(self)
 	return _.cloneTable(self.item, false, "type", "typeName", "attrs", "info");
 end
 
+local function buildButtonFrameAttrs(btn)
+	res = {};
+	return res;
+end
+
+
 local ButtonMixin = {
 
 	IsActive = function(self)
@@ -221,6 +279,10 @@ local ButtonMixin = {
 		else
 			return true;
 		end
+	end,
+
+	GetType = function(self)
+		return self.item and self.item.type;
 	end,
 
 	HasPopup = function(self)
@@ -252,59 +314,86 @@ local ButtonMixin = {
 
 	SetupButtonFrame = function (self)
 		local btn = self:GetButtonFrame();
+		local button = self.item;
 		local attrs, icon;
-		if (self.item.useFirstAvailable and false) then
-			-- self.bestButton = self:GetPopupModel():GetFirstAvailableButton();
-			-- attrs, info = self.bestButton.attrs, self.bestButton.info;
-			-- icon = info and info.icon;
-		else
-		--btnModel
-			local button = self.item;		
-			attrs = button.attrs or {}
-			local info = button.info or {};
-			icon = info.icon;
 
-			if (not attrs.entity_id) then
-				attrs.entity_id = info.id;
-			end
+		-- if (self.item.useFirstAvailable and false) then
+		-- 	-- self.bestButton = self:GetPopupModel():GetFirstAvailableButton();
+		-- 	-- attrs, info = self.bestButton.attrs, self.bestButton.info;
+		-- 	-- icon = info and info.icon;
+		-- elseif (HUHUHUHUHUHUHUHU) then
+		-- 	local button = self.item;		
+		-- 	attrs = button.attrs or {}
+		-- 	local info = button.info or {};
+		-- 	icon = info.icon;
 
-			if (attrs.type1) then
-				attrs["*type1"] = attrs.type1;
-				attrs.type1 = nil;
-			end
+		-- 	if (not attrs.entity_id) then
+		-- 		attrs.entity_id = info.id;
+		-- 	end
 
-			attrs = _.cloneTable(attrs);
+		-- 	if (attrs.type1) then
+		-- 		attrs["*type1"] = attrs.type1;
+		-- 		attrs.type1 = nil;
+		-- 	end
 
-			if (button.type == "macro") then
-				local check = _.GetMacroInfoTable(button.info.id);
-				if (check.name ~= button.info.name) then
-					local newid = GetMacroIndexByName(info.name);
-					_.print("MACRO MISMATCH. ", button.info.name, button.info.id, ", NOW:", check.name, "new id should be: ", newid);
-					button.attrs["*type1"] = "macro";
-					button.attrs["macro"] = button.info.name;
-					button.attrs.entity_id = newid;
-					button.info.id = newid;
-				end
-			elseif (button.type == "spell") then
-				attrs["*helpbutton1"] = "heal1";
-				attrs["spell-heal1"] = attrs["*type1"];
-				attrs["alt-spell-heal1"] = attrs["*type1"];
-				attrs["alt-unit-heal1"] = attrs["player"];
-			end
-		end
-		btn:SetupAction(attrs, icon);
+		-- 	attrs = _.cloneTable(attrs);
 
-		-- for key, value in pairs(attrs) do
-		-- 	btn:SetAttribute(key, value);
+		-- 	if (button.type == "macro") then
+		-- 		local check = _.GetMacroInfoTable(button.info.id);
+		-- 		if (check.name ~= button.info.name) then
+		-- 			local newid = GetMacroIndexByName(info.name);
+		-- 			_.print("MACRO MISMATCH. ", button.info.name, button.info.id, ", NOW:", check.name, "new id should be: ", newid);
+		-- 			button.attrs["*type1"] = "macro";
+		-- 			button.attrs["macro"] = button.info.name;
+		-- 			button.attrs.entity_id = newid;
+		-- 			button.info.id = newid;
+		-- 		end
+		-- 		attrs["checkselfcast"] = true;
+		-- 		attrs["checkfocuscast"] = true;
+		-- 	elseif (button.type == "spell") then
+		-- 		attrs["checkselfcast"] = true;
+		-- 		attrs["checkfocuscast"] = true;
+		-- 	end
 		-- end
-		-- btn.icon:SetTexture(info.icon or EMPTYSLOT);
+
+		--local attrs = 
+		--buildButtonFrameAttrs(button);
+		if (button.type == "item") then
+			if (type(button.info.id) ~= "number") then
+				C_Timer.After(2, function() 
+					local info = _.GetItemInfoTable(button.typeName);
+					button.info = info;
+					btn:SetupAction(button.attrs);
+					btn:SetupIcon(button);
+				end)
+			else
+				btn:SetupAction(button.attrs);
+				btn:SetupIcon(button);
+			end
+			-- local name = GetItemInfo(button.typeName);
+			-- local id = GetItemInfoInstant(button.typeName);
+			-- print("LOOKING FOR", button.typeName, name, id, button.info.id);
+			-- if (not button.info or type(button.info.id) ~= "number") then
+			-- 	A.Bus.OnItem(button.typeName, function(info) 
+			-- 		print("OPLYA!");
+			-- -- 		button.info = info;
+			-- -- 		btn:SetupAction(button.attrs);
+			-- -- 		btn:SetupIcon(button);
+			-- 	 end);
+			-- 	 GetItemInfo(button.typeName);
+			-- else
+			-- 	btn:SetupAction(button.attrs);
+			-- 	btn:SetupIcon(button);
+			-- end
+		else
+			btn:SetupAction(button.attrs);
+			btn:SetupIcon(button);
+		end
+
 	end,
 
 	UpdateButtonFrame = function (self)
 		local button = self.item;
-		-- if (self.item.useFirstAvailable and self.bestButton) then
-		-- 	button = self.bestButton;
-		-- end
 		if (not button) then return end;
 
 		local frame = self:GetButtonFrame();		
@@ -318,32 +407,41 @@ local ButtonMixin = {
 			updateSpellButtonFrame(button, frame);
 		elseif (button.type == "macro") then
 			updateMacroButtonFrame(button, frame);
-		-- else
-	
+		elseif (button.type == "special-button") then
+			updateSpecialButtonFrame(button, frame);
 		end
 	end,
 
-	GetUpdateContext = function(self, index)
-		local parentModel = self:GetParentBarModel();
-		local parentBar = parentModel.item;
-		local buttons = parentBar.buttons;
-		index = index or self.item.index or parentBar.buttonsCount or 0;
-		local lineSize = self.parentBar.buttonsInLine;
-		local lineNumber = math.modf(index / parentBar.buttonsInLine);
-		local lineIndex = math.fmod(index, parentBar.buttonsInLine);
-		local prevButton = index > 0 and buttons[index + 1];
-		local prevLineFirstButton = index >= lineSize and buttons[(lineNumber * lineSize) + 1] or nil;
-		return index, lineSize, lineNumber, lineIndex, prevButton, prevLineFirstButton;
-	end,
+	-- GetUpdateContext = function(self, index)
+	-- 	local parentModel = self:GetParentBarModel();
+	-- 	local parentBar = parentModel.item;
+	-- 	local buttons = parentBar.buttons;
+	-- 	index = index or self.item.index or parentBar.buttonsCount or 0;
+	-- 	local lineSize = self.parentBar.buttonsInLine;
+	-- 	local lineNumber = math.modf(index / parentBar.buttonsInLine);
+	-- 	local lineIndex = math.fmod(index, parentBar.buttonsInLine);
+	-- 	local prevButton = index > 0 and buttons[index + 1];
+	-- 	local prevLineFirstButton = index >= lineSize and buttons[(lineNumber * lineSize) + 1] or nil;
+	-- 	return index, lineSize, lineNumber, lineIndex, prevButton, prevLineFirstButton;
+	-- end,
 
-	UpdateButtonPosition = function (self, context)
+	UpdateButtonPosition = function (self)
+
+		local barModel = self:GetParentBarModel();
+		local bar = barModel.item;
 		local frame = self:GetButtonFrame();
 		local btn = self.item;
 
-		local index = context.index;
-		local lineSize = context.lineSize;
-		local lineNumber = context.lineNumber;
-		local lineIndex = context.lineIndex;
+		local index = self.index;
+			--context.index;
+		local lineSize = bar.buttonsInLine;
+			--context.lineSize;
+
+		-- local lineNumber = context.lineNumber;
+		-- local lineIndex = context.lineIndex;
+
+		local lineNumber = math.modf(index / lineSize);
+		local lineIndex = math.fmod(index, lineSize);
 
 		local bar = self:GetParentBarBar();
 		local barPadding = bar.padding;
@@ -355,19 +453,22 @@ local ButtonMixin = {
 		local grow = A.Grows.Get(bar.grow);
 		
 		point = grow.point;
-		local ids;
+		--local ids;
 		if (index == 0) then
 			
 			offsetY = getButtonOffsetY(point, barPadding);
 			offsetX = getButtonOffsetX(point, barPadding);
 			relativePoint = point;
 			parent = self:GetParentBarFrame();
-			ids = bar.id;
+			--ids = bar.id;
 
 		elseif (lineIndex > 0) then
-			parent = A.Button.getButtonFrame(context.prevButton);
+
+			parent = barModel.lastButton:GetButtonFrame();
+				--A.Button.getButtonFrame(context.prevButton);
 			relativePoint = grow.relativePoint;
-			ids = context.prevButton.id;
+			--ids = barModel.lastButton.item.id;
+				--context.prevButton.id;
 			if (grow.axisReverted) then
 				offsetY = getButtonOffsetY(point, barSpacing);
 			else
@@ -375,9 +476,12 @@ local ButtonMixin = {
 			end
 	
 		else
-			parent = A.Button.getButtonFrame(context.prevLineFirstButton);
+			parent = barModel.lastLineFirstButton:GetButtonFrame();
+				--A.Button.getButtonFrame(context.prevLineFirstButton);
 			relativePoint = grow.relativePointFirst;
-			ids = context.prevLineFirstButton.id;
+
+			--ids = barModel.lastFirstLineButton.item.id;
+				--context.prevLineFirstButton.id;
 			if (grow.axisReverted) then
 				offsetX = getButtonOffsetX(point, barSpacing);
 			else
@@ -389,11 +493,63 @@ local ButtonMixin = {
 	
 		frame:SetSize(bar.buttonSize, bar.buttonSize);
 		frame:ClearAllPoints();
+
 		frame:SetPoint(point, parent, relativePoint, offsetX, offsetY);
 	
 	end,
-	
-
+	SetupRefreshListeners = function(model)
+		local frame = model:GetButtonFrame();
+		model.refreshOn = {
+			["BAG_UPDATE"] = 2,
+			["BAG_UPDATE_COOLDOWN"] = 2,
+			["ACTIONBAR_UPDATE_COOLDOWN"] = 3,
+			["ACTIONBAR_UPDATE_USABLE"] = 3,
+			["SPELL_UPDATE_USABLE"] = 1,
+			["UNIT_POWER_UPDATE"] = { 1, function(arg) return arg=="player" end },
+			["PLAYER_ALIVE"] = 3,
+			["PLAYER_UNGHOST"] = 3,
+			["PLAYER_DEAD"] = 3,
+			["PLAYER_LEVEL_UP"] = 3,
+		}
+		for event, x in pairs(model.refreshOn) do
+			frame:RegisterEvent(event);
+		end
+		-- for event, x in pairs(model.spellRefreshOn) do
+		-- 	frame:RegisterEvent(event);
+		-- end
+		
+		frame:SetScript("OnEvent", function(self, event, arg) 
+			if (model.deleted or model.hidden) then
+				return;
+			end
+			local modelType = model:GetType();
+			local checkTbl;
+			if (modelType ~= "item" and modelType ~="spell") then
+				return
+			end
+			local checkArg;
+			local modelBit = modelType == "item" and 2 or 1;
+			local checkBit = model.refreshOn[event] or 0;
+			if (type(checkBit) == "table") then
+				checkBit = model.refreshOn[event][1];
+				checkArg = model.refreshOn[event][2];
+			end
+			if (bit.band(modelBit,checkBit) == modelBit) then
+				if (checkArg) then
+					if (not checkArg(arg)) then return end
+				end
+				model:UpdateButtonFrame();
+			end
+		end)
+	end,
+	InitializeButton = function(self)
+		if (self.builded) then return end;
+		local btn = self.item;
+		local mixData = A.Button.BuildAttributes(btn, true);
+		if (type(mixData) == "table") then
+			_.mixin(btn, mixData);
+		end
+	end,
 	InitializeButtonFrame = function(self, context)
 
 		if (self.builded) then return end;
@@ -404,19 +560,42 @@ local ButtonMixin = {
 		local button = self.item;
 		local size = bar.buttonSize;
 		local parent = self:GetParentBarFrame();
-		local frame = CreateFrame("Button", _.buildFrameName(button.id), parent, "SecureActionButtonTemplate, TabuBars_Button, SecureHandlerEnterLeaveTemplate");
+		local frame = CreateFrame("Button", _.buildFrameName(button.id), parent, "ActionButtonTemplate, SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate");
 		self:SetButtonFrame(frame);
+
 		if (barModel.item.isNested) then
 			frame.isNested = true;
 		end
+		-- if (buttonModel.item.type == "special-button") then
+		-- 	frame.special = true;
+		-- end
 		if (button.hidden) then
 			frame:Hide();
 		end
 		frame:SetSize(size, size);
-	
+		local ntsize = size * 1.83333; --1.78378378;
+		frame.NormalTexture:SetSize(.1, .1);
+		--frame.FlyoutBorder:Show();
 		frame.icon:SetTexCoord(.08, .92, .08, .92);
+		local pt = frame:GetPushedTexture();
+		pt:SetTexCoord(.08, .92, .08, .92);
 
-		_.addFrameBorder(frame, 0.15, 0.15, 0.15, 1);
+		local hlt = frame:GetHighlightTexture();
+		hlt:ClearAllPoints();
+		hlt:SetPoint("TOPLEFT", 0, 0);
+		hlt:SetPoint("BOTTOMRIGHT", 0, 0);
+		hlt:SetAllPoints();
+
+		--hlt:SetSize(size, size);
+
+		hlt:SetTexCoord(.08, .92, .08, .92);
+
+		_.setFrameBorder(frame, 0, 0, 0, .8);
+		local bg = _.createColorTexture(frame, 0, 0, 0, .1, "BACKGROUND");
+		bg:SetDrawLayer("BACKGROUND", -1);
+		--print("#", frame.icon:GetFrameLevel(), bg:GetFrameLevel());
+
+		frame.bgOverlay = _.createColorTexture(frame, .5, 0, 0, 0, "BORDER");
 
 		frame:SetFrameLevel(parent:GetFrameLevel()+1);
 		frame:RegisterForClicks("AnyUp");
@@ -438,13 +617,18 @@ local ButtonMixin = {
 		frame.acceptNewThing = function() 
 
 			if (A.Locked("acceptNewThing")) then return end;
-			local newbutton = A.GetCursorInfoData();	
+			local newbutton = A.GetDragItem();
 			ClearCursor();
+			--A.ClearCursor();
 
 			if newbutton then
-				buttonModel:Pickup();
+				local item = buttonModel:Pickup();
 				buttonModel:Change(newbutton);
+				A.dragStop();
 				barModel:TryExpand(buttonModel);
+				if (item) then
+					A.dragStart(item);
+				end
 			end		
 		end;
 	
@@ -453,8 +637,8 @@ local ButtonMixin = {
 			if (not self.contextMenu) then
 				self.contextMenu = A.Settings.GetButtonMenuFrame();
 			end
-			UIDropDownMenu_Initialize(self.contextMenu, function()
-				A.Settings.PopulateButtonMenu(self, button, bar);
+			UIDropDownMenu_Initialize(self.contextMenu, function(self,level)
+				A.Settings.PopulateButtonMenu(self, button, bar, level);
 			end, "MENU");
 			ToggleDropDownMenu(1, nil, self.contextMenu, "cursor", 3, -3);
 		end
@@ -493,15 +677,19 @@ local ButtonMixin = {
 			) then return end;
 			
 			if (shift_key) then
-				buttonModel:Pickup();
+				
+				local item = buttonModel:Pickup();
 				buttonModel:Clean();
 				buttonModel:UpdateButtonFrame();
-			elseif (alt_key) then
-				A.draggingButton = button;
+				if item then
+					A.dragStart(item);
+				end
+			-- elseif (alt_key) then
+			-- 	A.draggingButton = button;
 			end
 		end);
 	
-
+		self:SetupRefreshListeners();
 
 		if (not button.hidden) then
 			frame:Show();
@@ -538,7 +726,25 @@ local ButtonMixin = {
 		return barModel:GetParentButtonModel();
 	end,
 	--#endregion
-
+	IsEmpty = function(self)
+		return self.item.type == nil or self.item.type == "";
+	end,
+	IsShown = function(self)
+		local frame = self:GetButtonFrame();
+		if (not frame) then return false end;
+		return frame:IsShown() == true;
+	end,
+	IsHidden = function(self)
+		return not self:IsShown();
+	end,
+	Show = function(self)
+		local frame = self:GetButtonFrame();
+		frame:Show();
+	end,
+	Hide = function(self)
+		local frame = self:GetButtonFrame();
+		frame:Hide();
+	end,
 	--#region Popup
 	SetupButtonPopupBehavior  = function (self)
 		if (InCombatLockdown()) then return end;
@@ -574,9 +780,10 @@ local ButtonMixin = {
 	end,
 	--#endregion
 
-	Rebuild = function (self)
-		A.Button.Build(self.item);
-	end,
+	-- Rebuild = function (self)
+	-- 	print(".....", "Bu Rebuild");
+	-- 	--A.Button.Build(self.item);
+	-- end,
 
 	Delete = function (self)
 		local parentModel = self:GetParentBarModel();
@@ -594,9 +801,10 @@ local ButtonMixin = {
 	end,
 
 	AddBar = function (self)
+
 		local barModel = A.Bar.NewBar(self);
 		self.item.bar = barModel.item;
-		self:Rebuild();
+		self:GetParentBarModel():Rebuild();
 		A.Bar.UpdateButtonsRefs();
 
 	end,
@@ -609,10 +817,43 @@ local ButtonMixin = {
 			PickupItem(button.info.id);
 		elseif (button.type == "macro") then
 			PickupMacro(button.info.id);
+		elseif (button.type == "special-button") then
+
+			-- C_Timer.After(1, function() 
+			-- 	SetCursor("Interact.blp");
+			-- end)
+
+			-- if (not A.PickupHolder) then
+			-- 	A.PickupHolder = CreateFrame("Frame", nil, UIParent);
+			-- 	A.PickupHolder:SetSize(32, 32);
+			-- 	_.createColorTexture(A.PickupHolder, 0,0,0, 1, "BACKGROUND");
+			-- 	A.PickupHolder.icon = A.PickupHolder:CreateTexture();
+			-- 	A.PickupHolder.icon:SetAllPoints();
+			-- 	A.PickupHolder:SetMovable(true);
+			-- end
+			-- local scale = UIParent:GetEffectiveScale();
+			-- local x, y = GetCursorPosition();
+			-- local txt = self:GetButtonFrame().icon:GetTexture();
+			-- print("###", x, y, txt);
+			-- A.PickupHolder.icon:SetTexture(txt);
+			-- A.PickupHolder.icon:SetAllPoints();
+			--A.PickupHolder:SetPoint("BOTTOMLEFT", x / scale + 25, y / scale + 25);
+			--A.PickupHolder:StartMoving();
+
+			--PickupSpecialButton(self);
+			-- A.pickedUpButton = {
+			-- 	type = self.item.type,
+			-- 	typeName = self.item.typeName
+			-- }
+			--A.dragStart();
+		end
+		if (_.isValue(self.item.type)) then
+			return _.cloneTable(self.item, nil, "type", "typeName", "info");
 		end
 	end,
 
 	Change = function(self, newbutton)
+
 		local button = self.item;
 		_.mixin(button, newbutton);
 		self:SetupButtonFrame();
@@ -623,7 +864,7 @@ local ButtonMixin = {
 		local button = self.item;
 		button.type = nil;
 		button.typeName = nil;
-		button.attrs = { ["*type1"] = "" };
+		button.attrs = { ["*type1"] = "", special = false };
 		button.info = {
 			icon = EMPTYSLOT
 		};
@@ -652,30 +893,36 @@ local ButtonMixin = {
 	end
 }
 
+A.Button.EmptyButtonAttributes = function()
+	return {
+		["*type1"] = "", 
+		special = false
+	}
+end
 
 A.Button.Empty = function()
 	return {
 		type = nil,
 		typeName = nil,
-		attrs = { ["*type1"] = "" },
+		attrs = A.Button.EmptyButtonAttributes(),
 		info = { icon = EMPTYSLOT }
 	}
 end
 
-A.Button.SpellButtonProto = function(id, arg)
-	local sa, sb = GetSpellBookItemInfo(id, arg);
-	info = _.GetSpellInfoTable(sb);
-	return {
-		type = "spell",
-		typeName = info.name,
-		attrs = {
-			["*type1"] = "spell",
-			spell = info.name,
-			entity_id = info.id,
-		},
-		info = info
-	};
-end
+-- A.Button.SpellButtonProto = function(id, arg)
+-- 	local sa, sb = GetSpellBookItemInfo(id, arg);
+-- 	info = _.GetSpellInfoTable(sb);
+-- 	return {
+-- 		type = "spell",
+-- 		typeName = info.name,
+-- 		attrs = {
+-- 			["*type1"] = "spell",
+-- 			spell = info.name,
+-- 			entity_id = info.id,
+-- 		},
+-- 		info = info
+-- 	};
+-- end
 
 A.Button.ToModel = function (button)
 	if (button == nil) then
@@ -705,6 +952,7 @@ end
 
 
 A.Button.Build = function (button, index)
+
 	if (not button) then
 		_.print("Button.Build nil argument");
 		return;
@@ -712,46 +960,35 @@ A.Button.Build = function (button, index)
 
 	local model = A.Button.ToModel(button);
 	if (model.deleted) then
-		return false;
+		return false, model, false;
 	end
 
 	local barModel = model:GetParentBarModel();
 	local bar = barModel.item;
 
+	model:InitializeButton();
 	model:InitializeButtonFrame();
-	
+	local firstInLine = false;
+
 	if (index ~= nil) then
-		local context = {
-			popup = bar.parentButtonId ~= nil,
-			index = index,
-			bar = bar,
-			lineSize = bar.buttonsInLine,
-			lineNumber = math.modf(index / bar.buttonsInLine),
-			lineIndex = math.fmod(index, bar.buttonsInLine);
-			prevButton = barModel.prevButton,
-			prevLineFirstButton = barModel.prevLineFirstButton
-		}
-		barModel.prevButton = button;
-		if (context.lineIndex == 0) then
-			barModel.prevLineFirstButton = button;
-		end
-		button.index = index;
-		model:UpdateButtonPosition(context);
+		firstInLine = math.fmod(index, bar.buttonsInLine) == 0;
+		model.index = index;
 	end
+
+	model:UpdateButtonPosition();
 
 	if (button.bar) then
 		A.Bar.Build(button.bar);
 	end
 
-	if (not InCombatLockdown()) then
-		model:SetupButtonFrame();
-	end
+
+	model:SetupButtonFrame();
 	model:UpdateButtonFrame();
 	model:SetupButtonPopupBehavior();
 
 	model.builded = true;
 
-	return true;
+	return true, model, firstInLine;
 end
 
 
@@ -790,4 +1027,94 @@ A.Button.getButtonFrame = function(button)
 end
 
 
+A.Button.BuildAttributes = function(thingType, thingId)
+	local info;
+	local isRealButton = type(thingType) == "table";
+	local cacheForced;
+	local btn;
+	if (isRealButton) then
+		btn = thingType;
+		cacheForced = thingId == true;
+		thingId = thingType.typeName;
+		thingType = thingType.type;
+	end
+	if (isRealButton and not thingType) then
+		return A.Button.Empty();
+	elseif (thingType == "spell") then
+		local sa, sb = GetSpellBookItemInfo(thingId, "");
+		--print("#", sa, sb, " -- ", thingId);
+		if (type(sb) == "number") then
+			info = _.GetSpellInfoTable(sb);
+		elseif (btn) then
+			info = btn.info;
+		else
+			info = {
+				name = thingId
+			}
+		end
+		return {
+			type = "spell",
+			typeName = info.name,
+			attrs = {
+				["*type1"] = "spell",
+				spell = info.name,
+				checkselfcast = true,
+				checkfocuscast = true,
+				entity_id = info.id,
+				special = false,
+			},
+			info = info
+		};
+	elseif (thingType == "item") then
+		if (cacheForced and btn.info and type(btn.info.id) == "number") then
+			info = btn.info;
+		else
+			info = _.GetItemInfoTable(thingId);
+		end
+		return {
+			type = "item",
+			typeName = info.name,
+			attrs = {
+				["*type1"] = "item",
+				item = info.name,
+				checkselfcast = true,
+				checkfocuscast = true,
+				entity_id = info.id,
+				special = false,
+			},
+			info = info			
+		}
+	elseif (thingType == "macro") then
+		info = _.GetMacroInfoTable(thingId);
+		return {
+			type = "macro",
+			typeName = info.name,
+			attrs = {
+				["*type1"] = "macro",
+				macro = info.name,
+				checkselfcast = true,
+				checkfocuscast = true,
+				entity_id = info.id,
+				special = false,
+			},
+			info = info				
+		}
+	elseif (thingType == "special-button") then
+		local sb = A.SButton.GetButtonProto(thingId);
+		return sb;
+	end
+	print("MISSING CASE", thingType, thingId);
 
+end
+
+
+
+-- A.Button.GetCursorInfoData = function()
+
+-- 	local thingType, id = GetCursorInfo();
+-- 	if (A.pickedUpButton) then
+-- 		thingType = A.pickedUpButton.type;
+-- 		id = A.pickedUpButton.typeName;
+-- 	end
+-- 	return A.Button.BuildAttributes(thingType, id);
+-- end

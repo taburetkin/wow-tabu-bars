@@ -1,4 +1,4 @@
-## Interface: 11303
+## Interface: 11304
 ## Title: <%= name %>
 ## Author: dimtabu
 ## Version: <%= version %>
@@ -16,4 +16,6 @@ settings.lua
 bus.lua
 bar.lua
 button.lua
+sbar.lua
+sbutton.lua
 Tabu-Bars.lua

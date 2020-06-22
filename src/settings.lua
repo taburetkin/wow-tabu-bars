@@ -209,7 +209,59 @@ local function GrowEditFrame(label, parent, context)
 	return edit;
 end
 
+local function ColorEditFrame(label, parent, context)
+	local edit = CreateFrame("Frame", nil, parent, _.buildFrameName("ConfigControlTemplate"));
+	edit:SetHeight(40);
+	createEditFrameLabel(edit, label);
 
+	local clr = CreateFrame("Button", nil, edit);
+	clr:SetPoint("RIGHT", edit, "RIGHT", -2, 0);
+	clr:SetSize(90, 40);
+
+	local t = clr:CreateTexture(nil, "BACKGROUND");
+	t:SetAllPoints();
+	clr.bg = t;
+	
+	clr.text = clr:CreateFontString(nil, "OVERLAY");
+	clr.text:SetFont("FONTS\\ARIALN.ttf", 10, "THICKOUTLINE");
+	clr.text:SetPoint("TOPLEFT", clr, "TOPLEFT", 1, -1);
+	clr.text:SetJustifyH("LEFT");
+
+	local frm = "R: %s\nG: %s\nB: %s\nA: %s";
+	clr.text.UpdateText = function(self, r, g, b, a)
+		r = r and _.round(r, 5) or "";
+		g = g and _.round(g, 5) or "";
+		b = b and _.round(b, 5) or "";
+		a = a and _.round(a, 5) or "";
+		self:SetText(string.format(frm, r,g,b,a));
+	end
+
+
+	clr:SetScript("OnClick", function() 
+		Tabu.Controls.ShowColorPicker(function(r,g,b,a) 
+			if (r and g and b) then
+				edit:setControlValue({r,g,b,a});
+			end
+		end, unpack(edit:getControlValue()))
+	end)
+	
+	edit.control = clr;
+
+	
+	edit.getControlValue = function(self)
+		return self._controlValue;
+	end
+	edit.setControlValue = function(self, value)
+		if (value == nil) then
+			value = { 0, 0, 0, .8 };
+		end
+		self._controlValue = value;
+		self.control.bg:SetColorTexture(unpack(value));
+		self.control.text:UpdateText(unpack(value));
+	end	
+
+	return edit;
+end
 
 
 
@@ -276,6 +328,13 @@ local barConfigControls = {
 		label = "Buttons spacing",
 		control = "number"
 	},	
+	{
+		group = "main",		
+		key = "background",
+		label = "Bar background color",
+		control = "color",
+		beforeValueSet = function(value) return value or {0,0,0,.8} end
+	},		
 }
 
 local function getValueForControl(cntx, bar)
@@ -307,14 +366,15 @@ local function buildConfigControlFrame(cfgFrame, context)
 		controlFrame = GrowEditFrame(label, cfgFrame, context);
 	elseif (controlType == "growAndSide") then
 		controlFrame = GrowAndSideEditFrame(label, cfgFrame, context);
-
+	elseif (controlType == "color") then
+		controlFrame = ColorEditFrame(label, cfgFrame, context);
 	else
 		return;	
 	end
 
 	if (not controlFrame) then return end;
 	
-	controlFrame.applyFormValue = function(self, previous)
+	controlFrame.applyFormValue = function(self, previous, options)
 		local cfg = self:GetParent();
 		local bar = cfg.bar;
 		self:Hide();
@@ -328,7 +388,11 @@ local function buildConfigControlFrame(cfgFrame, context)
 		self:SetWidth(cfg:GetWidth() - 20);
 		self:ClearAllPoints();
 		if (not previous) then
-			self:SetPoint("TOPLEFT", 10, -10);
+			if (options and options.firstPoint) then
+				self:SetPoint(unpack(options.firstPoint));
+			else
+				self:SetPoint("TOPLEFT", 10, -10);
+			end
 		else
 			self:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -5);
 		end
@@ -389,6 +453,9 @@ local BarConfigFrameMixin = {
 	end,
 	UpdateFrameValues = function(frame)
 		local previousControlFrame;
+		local firstPoint = { "TOPLEFT", 10, -20 };
+		frame.childrenHeight = 0;
+		local count = 0;
 		for index, control in pairs(barConfigControls) do
 			if (not control.id) then
 				control.id = "CfgProp_"..index;
@@ -397,12 +464,16 @@ local BarConfigFrameMixin = {
 				control.controlFrame = buildConfigControlFrame(frame, control);
 			end
 			if (control.controlFrame) then
-				control.controlFrame:applyFormValue(previousControlFrame);
+				control.controlFrame:applyFormValue(previousControlFrame, { firstPoint = firstPoint });
 				if (control.controlFrame:IsShown()) then
 					previousControlFrame = control.controlFrame;
+					frame.childrenHeight = frame.childrenHeight + control.controlFrame:GetHeight() + 10;
+					count = count + 1;
 				end
 			end
 		end
+		--print("HEIGHT", frame.childrenHeight + 40, count);
+		frame:SetHeight(frame.childrenHeight + 40);
 	end
 }
 
@@ -411,18 +482,15 @@ local BarConfigFrameMixin = {
 
 
 local function createBarConfigFrame()
-	local frame = CreateFrame("Frame", nil, UIParent);
 
+	local frame = _.createDialogFrame({
+		bg = { .15,.15,.15,.9,"BACKGROUND" }
+	});
+
+	
 	frame:SetFrameLevel(UIParent:GetFrameLevel() + 100);
 	frame:SetPoint("CENTER");
 	frame:SetSize(348, 448);
-	_.createColorTexture(frame, 0,0,0,1);
-
-	frame:EnableMouse(true);
-	frame:SetMovable(true);
-	frame:RegisterForDrag("LeftButton");
-	frame:SetScript("OnDragStart", function(self) self:StartMoving(); end);
-	frame:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end);
 
 	_.mixin(frame, BarConfigFrameMixin);
 
@@ -460,6 +528,43 @@ A.Settings.ShowBarSettings = function(bar)
 end
 
 
+
+
+
+
+
+-- #region Confirmation dialogs
+
+local confirmProto = {
+	button1 = L("Yes"),
+	button2 = L("No"),
+	timeout = 0,
+	whileDead = true,
+	hideOnEscape = true,
+	preferredIndex = 3,  -- avoid some UI taint, see http://www.wowace.com/announcements/how-to-avoid-some-ui-taint/
+}
+
+local ButtonDeleteConfirm = A.Name .. "_ButtonDeleteConfirm";
+StaticPopupDialogs[ButtonDeleteConfirm] = _.mixin({
+	text = L("Do you want to get rid of this button?"),
+}, confirmProto);
+
+local BarDeleteConfirm = A.Name .. "_BarDeleteConfirm";
+StaticPopupDialogs[BarDeleteConfirm] = _.mixin({
+	text = L("Do you want to get rid of this action bar?"),
+}, confirmProto);
+
+local PopupBarDeleteConfirm = A.Name .. "_PopupBarDeleteConfirm";
+StaticPopupDialogs[PopupBarDeleteConfirm] = _.mixin({
+	text = L("Do you want to get rid of this button's popup bar?"),
+}, confirmProto);
+
+-- #endregion
+
+
+
+--#region Button Popup Menu
+
 A.Settings.GetButtonMenuFrame = function()
 	if (not BUTTONMENUFRAME) then
 		BUTTONMENUFRAME = CreateFrame("Frame", _.buildFrameName("ButtonDropDown"), UIParent, "UIDropDownMenuTemplate")
@@ -467,107 +572,209 @@ A.Settings.GetButtonMenuFrame = function()
 	return BUTTONMENUFRAME;
 end
 
-A.Settings.PopulateButtonMenu = function (self, button, bar)
-	local info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	info.isTitle = true;
-	info.text = L("Button options:");
-	local barModel = A.Bar.ToModel(bar);
-	local btnModel = A.Button.ToModel(button);
-	local isPopupBar = bar.isNested == true;
-	local popupModel = btnModel:GetPopupModel();
-	UIDropDownMenu_AddButton(info);
 
+local function GetSpecialButtonMenuItems(btnModel, barModel, popupModel)
+	local res = {
+		{
+			info = {
+				notCheckable = true,
+				text = L("Simple button"),
+				func = function() 
+					-- args: silent, mixWith, tryAddTwo
+					barModel:AddButton();
+				end				
+			}	
+		},
+		{
+			separator = true,
+		},		
+		-- {
+		-- 	info = {
+		-- 		notCheckable = true,
+		-- 		isTitle = true,
+		-- 		text = "--------------",			
+		-- 	}	
+		-- }		
+	}
 
-	info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	if (not btnModel:HasPopup()) then
-		info.text = L("Add popup action bar")
-		info.func = function()
-			btnModel:AddBar()
-		end;
-	else
-
-		-- info = UIDropDownMenu_CreateInfo()
-		-- info.notCheckable = false;
-		-- info.text = L("Take first available")
-		-- info.checked = btnModel.item.useFirstAvailable == true
-		-- info.func = function() 
-		-- 	btnModel.item.useFirstAvailable = not btnModel.item.useFirstAvailable;
-		-- 	btnModel:Rebuild();
-		-- end;
-		-- UIDropDownMenu_AddButton(info);	
-	
-
-		info = UIDropDownMenu_CreateInfo()
-		info.notCheckable = true;
-		info.text = L("Delete popup action bar")
-		info.func = function() 
-			popupModel:Delete();
-		end;
+	local sbtns = A.SButton.GetButtons();
+	for i, btn in pairs(sbtns) do
+		--Tabu.print(btn);
+		table.insert(res, {
+			info = {
+				notCheckable = true,
+				text = L(btn.label),
+				func = function() 
+					barModel:AddSpecialButton(btn);
+				end	
+			}
+		});
 	end
-	UIDropDownMenu_AddButton(info);	
+	return res;
+end
 
-	if (barModel.buttonsCount > 1) then
-		info = UIDropDownMenu_CreateInfo()
-		info.notCheckable = true;
-		info.text = L("Delete this button")
-		info.func = function() 
-			btnModel:Delete();
-		end;
-		UIDropDownMenu_AddButton(info);	
-	end
+local GetButtonPopupMenu = function(btnModel, barModel, popupModel, level)
+	local isPopup = barModel.item.isNested == true;
+	local notPopup = isPopup ~= true;
+	local res = {
+		{
+			info = {
+				isTitle = true,
+				notCheckable = true,
+				text = L("Button options:")
+			}
+		},
+		{
+			available = not btnModel:HasPopup(),
+			info = {
+				notCheckable = true,
+				text = L("Add popup action bar"),
+				func = function()
+					btnModel:AddBar()
+				end;
+			}
+		},
+		{
+			available = btnModel:HasPopup(),
+			info = {
+				notCheckable = true,
+				text = L("Delete popup action bar"),
+				func = function() 
+					StaticPopupDialogs[PopupBarDeleteConfirm].OnAccept = function()
+						popupModel:Delete();
+					end
+					StaticPopup_Show(PopupBarDeleteConfirm);
+				end
+			}
+		},
+		{
+			available = btnModel.item.type ~= nil,
+			info = {
+				notCheckable = true,
+				text = L("Clean this button"),
+				func = function() 
+					btnModel:Clean();
+				end
+			}
+		},		
+		{
+			available = barModel.buttonsCount > 1,
+			info = {
+				notCheckable = true,
+				text = L("Delete this button"),
+				func = function() 
+					StaticPopupDialogs[ButtonDeleteConfirm].OnAccept = function()
+						btnModel:Delete();
+					end
+					StaticPopup_Show(ButtonDeleteConfirm);
+				end
+			}
+		},
+		{
+			separator = true,
+		},		
+		{
+			info = {
+				notCheckable = true,
+				isTitle = true,
+				text = L("Bar options:")
+			}
+		},
+		{
+			id = "ADDBUTTON",
+			info = {
+				hasArrow = true,
+				notCheckable = true,
+				text = L("Add button"),
+				value = {
+					Level1_Key = "ADDBUTTON",
+					Sublevel_Key = "SIMPLEBUTTON"
+				}			
+			},
+			children = GetSpecialButtonMenuItems(btnModel, barModel, popupModel)
 
-	info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	info.isTitle = true;
-	info.text = L("Bar options:");
-	UIDropDownMenu_AddButton(info);
-
-	info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	info.text = L("Open bar settings");
-	info.func = function() 
-		if (A.Locked("BarSettings")) then return end;		
-		A.Settings.ShowBarSettings(bar);
-	end;
-	UIDropDownMenu_AddButton(info);	
-
-	if (not isPopupBar) then
-		info = UIDropDownMenu_CreateInfo()
-		info.notCheckable = true;
-		if (barModel.unlocked) then
-			info.text = L("Lock bar");
-			info.func = function() 
-				barModel:Lock();
-			end;
-		else
-			info.text = L("Unlock bar")
-			info.func = function() 
-				barModel:Unlock();
-			end;			
+		},		
+		{
+			info = {
+				notCheckable = true,
+				text = L("Open bar settings"),
+				func = function() 
+					A.Settings.ShowBarSettings(barModel.item);
+				end;				
+			}
+		},
+		{
+			available = notPopup and barModel.unlocked == true,
+			info = {
+				notCheckable = true,
+				text = L("Lock bar");
+				func = function() 
+					barModel:Lock();
+				end
+			}
+		},
+		{
+			available = notPopup and barModel.unlocked ~= true,
+			info = {
+				notCheckable = true,
+				text = L("Unlock bar");
+				func = function() 
+					barModel:Unlock();
+				end
+			}
+		},
+		{
+			info = {
+				notCheckable = true,
+				text = L("Delete this bar"),
+				func = function() 
+					StaticPopupDialogs[BarDeleteConfirm].OnAccept = function()
+						barModel:Delete();
+					end
+					StaticPopup_Show(BarDeleteConfirm);					
+				end
+			}
+		}
+	}
+	if (level == 1) then
+		return res;
+	elseif (level == 2) then
+		local parentId = UIDROPDOWNMENU_MENU_VALUE["Level1_Key"];
+		local found = _.findFirst(res, function(item) return item.id == parentId end);
+		if (found) then
+			return found.children;
 		end
-		UIDropDownMenu_AddButton(info);	
 	end
 
-	info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	info.text = L("Add button")
-	info.func = function() 
-		barModel:AddButton();
-	end;
-	UIDropDownMenu_AddButton(info);	
-
-	info = UIDropDownMenu_CreateInfo()
-	info.notCheckable = true;
-	info.text = L("Delete this bar")
-	info.func = function() 
-		barModel:Delete();
-	end;
-	UIDropDownMenu_AddButton(info);	
+	return {};
 
 end
 
+A.Settings.PopulateButtonMenu = function (self, button, bar, level)
+	local barModel = A.Bar.ToModel(bar);
+	local btnModel = A.Button.ToModel(button);
+	local popupModel = btnModel:GetPopupModel();
+
+	local buttons = GetButtonPopupMenu(btnModel, barModel, popupModel, level);
+
+	local info;
+	for i, item in ipairs(buttons) do
+		if (item.available ~= false) then
+			if (item.separator) then
+				UIDropDownMenu_AddSeparator(level);
+			else
+				info = UIDropDownMenu_CreateInfo();
+				_.mixin(info, item.info);
+				UIDropDownMenu_AddButton(info, level);
+			end
+		end
+	end
+
+end
+
+
+
+--#endregion
 
 
 local function FSLine(frame, previous)
@@ -594,7 +801,7 @@ A.Settings.CreateInfoFrame = function (chatCommands)
 	frame:SetFrameStrata("DIALOG");
 	frame:SetWidth(400);
 	_.createColorTexture(frame, .15,.15,.15,.8);
-	_.addFrameBorder(frame, 0,0,0, 1);
+	_.setFrameBorder(frame, 0, 0, 0, 1);
 	frame:SetPoint("CENTER", 0, 0);
 
 	local width = frame:GetWidth() - 10;
