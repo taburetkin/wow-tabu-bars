@@ -6,6 +6,9 @@
 ## SavedVariablesPerCharacter: <%= nametrunc %>Data
 
 # modules
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 embeds.xml
 
 ui-elements.xml

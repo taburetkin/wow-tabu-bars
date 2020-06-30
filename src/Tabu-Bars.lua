@@ -23,6 +23,39 @@ local function tabubarsSlashProcessor(type)
 		Tabu.dump(Cache());
 	elseif (type == "info") then
 		A.ShowInfo();
+	elseif (type == "debug") then
+		A.debug();
+	elseif (type == "inspect") then
+		local model = A.Models.GetById(subtype);
+		Tabu.dump(model and model.item);
+	elseif (type == "disable") then
+		if (not subtype) then 
+			_.print('specify what to disable, id or "all"');
+			return 
+		elseif (subtype == "all") then
+			A.Bar.Iterate(A.Bar.Disable)
+		else
+			local model = A.Models.GetById(subtype);
+			if (not model) then return end;
+			A.Bar.Disable(model.item);
+		end
+		ReloadUI();
+	elseif (type == "enable") then
+		if (not subtype) then 
+			return 
+		elseif (subtype == "all") then
+			A.Bar.Iterate(A.Bar.Enable)
+		else
+			local model = A.Models.GetById(subtype);
+			if (not model) then return end;
+			A.Bar.Enable(model.item);
+		end
+		ReloadUI();
+
+	elseif (type == "list") then
+		A.Bar.Iterate(function(bar) 
+			_.print("Bar", bar.id, (bar.disabled and "disabled" or "enabled"));
+		end)
 	else
 		_.print("Unknown command", type);
 	end
@@ -57,24 +90,27 @@ A.ShowInfo = function()
 end
 
 local refreshButtonEvents = {
-	--"UPDATE_SHAPESHIFT_FORMS",
-	--"PLAYER_ALIVE",
-	--"PLAYER_CONTROL_GAINED",
-	--"PLAYER_REGEN_ENABLED",
-	--"PLAYER_REGEN_DISABLED",
-	--"PLAYER_UNGHOST",
 	"BAG_UPDATE",
 	"BAG_UPDATE_COOLDOWN",
 	"ACTIONBAR_UPDATE_COOLDOWN",
+	"ACTIONBAR_UPDATE_USABLE",
 	"SPELL_UPDATE_COOLDOWN",
-	--"UPDATE_BATTLEFIELD_STATUS"
-	--"GET_ITEM_INFO_RECEIVED"
+	"SPELL_UPDATE_USABLE"
 }
 
 local initializeCache = function ()
 	local cache = Cache();
 	if (not cache.bars) then
 		cache.bars = {};
+	end
+	if (not cache.barDefaults) then
+		cache.barDefaults = {
+			buttonsInLine = 12,
+			buttonSize = 36
+		};
+	end
+	if (not cache.buttonDefaults) then
+		cache.buttonDefaults = {};
 	end
 end
 
@@ -85,7 +121,7 @@ local function initialize()
 	-- C_Timer.After(5, function() 
 	-- end)
 	A.Bar.BuildAll();
-	--A.Bar.RefreshButtonsOn(refreshButtonEvents);
+	A.Bar.RefreshButtonsOn(refreshButtonEvents);
 
 	_.print(L(chatCommands[1]));
 	_.print(L(chatCommands[2]));
@@ -93,6 +129,39 @@ local function initialize()
 	--A.specialBars();
 
 end
+
+local getDefaults = function (t)
+	local c = Cache();
+	if (t == 'button') then
+		return c.buttonDefaults;
+	elseif t == 'bar' then
+		return c.barDefaults;
+	else
+		return {}
+	end
+end
+
+A.GetDefaultValue = function(entityType, key, entity, fb1, fb2, fb3)
+	local defs = getDefaults(entityType);
+	if (entity[key] ~= nil) then
+		return entity[key]
+	elseif defs[key] ~= nil then
+		return defs[key];
+	elseif fb1 ~= nil then
+		return fb1
+	elseif fb2 ~= nil then
+		return fb2
+	else
+		return fb3
+	end
+end
+
+Tabu.test = function()
+	--Tabu.dump(A.Lib);
+	local tbl = A.Lib.SharedMedia:HashTable( A.Lib.SharedMedia.MediaType.FONT );
+	Tabu.dump(tbl);
+end
+
 
 A.specialBars = function()
 	_.print("okey. now specials begin")

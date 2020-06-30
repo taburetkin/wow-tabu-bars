@@ -132,8 +132,8 @@ local ButtonFrameMixin = {
 			frame.bgOverlay:SetColorTexture(.1, 0, 0, 0);
 			fontString:SetTextColor(1,1,1,1);
 		end
-		local fnt, fntsize = fontString:GetFont();
-		fontString:SetFont(fnt, fntsize, "THICKOUTLINE");
+
+
 		fontString:SetText(count or "");
 	end,
 
@@ -163,10 +163,10 @@ local ButtonFrameMixin = {
 			frame.hotKeyAssigned = original;
 		end
 
-		local f, h = frame.HotKey:GetFont();
-		-- frame.hotKeyText:SetFont("Fonts\\ARIALN.ttf", 10, "THICK");
-		frame.HotKey:SetTextColor(0,1,1,1);
-		frame.HotKey:SetFont(f,h, "THICKOUTLINE");
+		-- local f, h = frame.HotKey:GetFont();
+		-- -- frame.hotKeyText:SetFont("Fonts\\ARIALN.ttf", 10, "THICK");
+		-- frame.HotKey:SetTextColor(0,1,1,1);
+		-- frame.HotKey:SetFont(f,h, "THICKOUTLINE");
 		frame.HotKey:SetText(key);
 
 	end,
@@ -202,12 +202,17 @@ local ButtonFrameMixin = {
 			end
 		end
 
-		if (self.hotKeyAssigned and self.hotKeyAssigned ~= "") then
+		if (_.isValue(self.hotKeyAssigned and self.hotKeyAssigned ~= "")) then
 			GameTooltip:AddLine("|cffff3000HotKey: |cffffffff"..self.hotKeyAssigned.."|r");
 		end
 		if (self.isNested) then
-			GameTooltip:AddLine("SHIFT-RightButton for swap with parent button");
+			GameTooltip:AddLine(L("SHIFT-RightButton for swap with parent button"));
 		end
+
+		if (_.isDebug()) then
+			GameTooltip:AddLine("BUTTON ID: "..(self.TBButtonId or "_")..", BAR ID: "..(self.TBBarId or "_"));
+		end
+
 		GameTooltip:Show();
 	end,
 
@@ -392,12 +397,56 @@ local ButtonMixin = {
 
 	end,
 
+	IsVisible = function (self)
+		if (not self.isIndicator) then return true end;
+		return self:CheckShowCondition();
+	end,
+
+	CheckShowCondition = function(self)
+		local btn = self.item;
+		if (not btn.showCondition) then return true end
+		if (btn.showCondition == "always") then return true end
+		if (btn.showCondition == "never") then return false end
+
+		if (btn.showCondition == "if not on cd") then
+			local start, dur, enab = _.getCooldown(btn.type, btn.info.id);
+			return start == nil or start == 0;			
+		end
+		if (btn.showCondition == "if on cd") then
+			local start, dur, enab = _.getCooldown(btn.type, btn.info.id);
+			return start and start > 0;
+		end
+	end,
+
 	UpdateButtonFrame = function (self)
 		local button = self.item;
 		if (not button) then return end;
 
 		local frame = self:GetButtonFrame();		
 		if (not frame) then return end;
+
+		local fnt, hght = frame.HotKey:GetFont();
+		frame.HotKey:SetTextColor(0,1,1,1);
+		fnt = A.GetDefaultValue('button', 'hotkeyTextFont', self.item, fnt);
+		hght = A.GetDefaultValue('button', 'hotkeyTextSize', self.item, hght);
+		frame.HotKey:SetFont(fnt,hght, "THICKOUTLINE");
+
+		local fnt, hght = frame.Count:GetFont();
+		fnt = A.GetDefaultValue('button', 'countTextFont', self.item, fnt);
+		hght = A.GetDefaultValue('button', 'countTextSize', self.item, hght);
+		frame.Count:SetFont(fnt, hght, "THICKOUTLINE");
+
+
+		-- local showed = self:CheckShowCondition();
+
+		-- if (not showed) then 
+		-- 	frame:SetSize(1,1);
+		-- 	return 
+		-- else
+		-- 	local bar = self:GetParentBarBar();
+		-- 	local size = bar.buttonSize;
+		-- 	frame:SetSize(size, size);
+		-- end;
 
 		if (not button.type) then
 			cleanButtonFrame(button, frame);
@@ -434,7 +483,7 @@ local ButtonMixin = {
 
 		local index = self.index;
 			--context.index;
-		local lineSize = bar.buttonsInLine;
+		local lineSize = barModel:GetOption('buttonsInLine', 12);
 			--context.lineSize;
 
 		-- local lineNumber = context.lineNumber;
@@ -444,14 +493,14 @@ local ButtonMixin = {
 		local lineIndex = math.fmod(index, lineSize);
 
 		local bar = self:GetParentBarBar();
-		local barPadding = bar.padding;
-		local barSpacing = bar.spacing;
+		local barPadding = barModel:GetOption('padding', 0);
+		local barSpacing = barModel:GetOption('spacing', 0);
 
 		local point, parent, relativePoint;
 		local offsetX = 0;
 		local offsetY = 0;
-		local grow = A.Grows.Get(bar.grow);
-		
+		local grow = A.Grows.Get(barModel:GetOption('grow','rightDown'));
+
 		point = grow.point;
 		--local ids;
 		if (index == 0) then
@@ -490,8 +539,8 @@ local ButtonMixin = {
 	
 			
 		end
-	
-		frame:SetSize(bar.buttonSize, bar.buttonSize);
+		local buttonSize = barModel:GetOption('buttonSize', 36);
+		frame:SetSize(buttonSize, buttonSize);
 		frame:ClearAllPoints();
 
 		frame:SetPoint(point, parent, relativePoint, offsetX, offsetY);
@@ -500,16 +549,16 @@ local ButtonMixin = {
 	SetupRefreshListeners = function(model)
 		local frame = model:GetButtonFrame();
 		model.refreshOn = {
-			["BAG_UPDATE"] = 2,
-			["BAG_UPDATE_COOLDOWN"] = 2,
-			["ACTIONBAR_UPDATE_COOLDOWN"] = 3,
-			["ACTIONBAR_UPDATE_USABLE"] = 3,
-			["SPELL_UPDATE_USABLE"] = 1,
+			-- ["BAG_UPDATE"] = 2,
+			-- ["BAG_UPDATE_COOLDOWN"] = 2,
+			-- ["ACTIONBAR_UPDATE_COOLDOWN"] = 3,
+			-- ["ACTIONBAR_UPDATE_USABLE"] = 3,
+			-- ["SPELL_UPDATE_USABLE"] = 1,
 			["UNIT_POWER_UPDATE"] = { 1, function(arg) return arg=="player" end },
-			["PLAYER_ALIVE"] = 3,
-			["PLAYER_UNGHOST"] = 3,
-			["PLAYER_DEAD"] = 3,
-			["PLAYER_LEVEL_UP"] = 3,
+			-- ["PLAYER_ALIVE"] = 3,
+			-- ["PLAYER_UNGHOST"] = 3,
+			-- ["PLAYER_DEAD"] = 3,
+			-- ["PLAYER_LEVEL_UP"] = 3,
 		}
 		for event, x in pairs(model.refreshOn) do
 			frame:RegisterEvent(event);
@@ -545,7 +594,7 @@ local ButtonMixin = {
 	InitializeButton = function(self)
 		if (self.builded) then return end;
 		local btn = self.item;
-		local mixData = A.Button.BuildAttributes(btn, true);
+		local mixData = A.Button.BuildAttributes(btn, true, 'Button: InitializeButton');
 		if (type(mixData) == "table") then
 			_.mixin(btn, mixData);
 		end
@@ -558,7 +607,9 @@ local ButtonMixin = {
 		local barModel = A.Bar.ToModel(bar);
 		local buttonModel = self;
 		local button = self.item;
-		local size = bar.buttonSize;
+		local size = barModel:GetOption('buttonSize', 36);
+			--bar.buttonSize;
+
 		local parent = self:GetParentBarFrame();
 		local frame = CreateFrame("Button", _.buildFrameName(button.id), parent, "ActionButtonTemplate, SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate");
 		self:SetButtonFrame(frame);
@@ -566,6 +617,10 @@ local ButtonMixin = {
 		if (barModel.item.isNested) then
 			frame.isNested = true;
 		end
+
+		frame.TBButtonId = button.id;
+		frame.TBBarId = bar.id;
+
 		-- if (buttonModel.item.type == "special-button") then
 		-- 	frame.special = true;
 		-- end
@@ -622,9 +677,9 @@ local ButtonMixin = {
 			--A.ClearCursor();
 
 			if newbutton then
+				A.dragStop();
 				local item = buttonModel:Pickup();
 				buttonModel:Change(newbutton);
-				A.dragStop();
 				barModel:TryExpand(buttonModel);
 				if (item) then
 					A.dragStart(item);
@@ -739,11 +794,15 @@ local ButtonMixin = {
 	end,
 	Show = function(self)
 		local frame = self:GetButtonFrame();
-		frame:Show();
+		if (frame) then
+			frame:Show();
+		end
 	end,
 	Hide = function(self)
 		local frame = self:GetButtonFrame();
-		frame:Hide();
+		if (frame) then
+			frame:Hide();
+		end
 	end,
 	--#region Popup
 	SetupButtonPopupBehavior  = function (self)
@@ -819,36 +878,11 @@ local ButtonMixin = {
 			PickupMacro(button.info.id);
 		elseif (button.type == "special-button") then
 
-			-- C_Timer.After(1, function() 
-			-- 	SetCursor("Interact.blp");
-			-- end)
 
-			-- if (not A.PickupHolder) then
-			-- 	A.PickupHolder = CreateFrame("Frame", nil, UIParent);
-			-- 	A.PickupHolder:SetSize(32, 32);
-			-- 	_.createColorTexture(A.PickupHolder, 0,0,0, 1, "BACKGROUND");
-			-- 	A.PickupHolder.icon = A.PickupHolder:CreateTexture();
-			-- 	A.PickupHolder.icon:SetAllPoints();
-			-- 	A.PickupHolder:SetMovable(true);
-			-- end
-			-- local scale = UIParent:GetEffectiveScale();
-			-- local x, y = GetCursorPosition();
-			-- local txt = self:GetButtonFrame().icon:GetTexture();
-			-- print("###", x, y, txt);
-			-- A.PickupHolder.icon:SetTexture(txt);
-			-- A.PickupHolder.icon:SetAllPoints();
-			--A.PickupHolder:SetPoint("BOTTOMLEFT", x / scale + 25, y / scale + 25);
-			--A.PickupHolder:StartMoving();
-
-			--PickupSpecialButton(self);
-			-- A.pickedUpButton = {
-			-- 	type = self.item.type,
-			-- 	typeName = self.item.typeName
-			-- }
-			--A.dragStart();
 		end
-		if (_.isValue(self.item.type)) then
-			return _.cloneTable(self.item, nil, "type", "typeName", "info");
+		if (_.isValue(button.type)) then
+			local cloned = _.cloneTable(self.item, nil, "type", "typeName", "info");
+			return cloned;
 		end
 	end,
 
@@ -952,18 +986,30 @@ end
 
 
 A.Button.Build = function (button, index)
-
 	if (not button) then
 		_.print("Button.Build nil argument");
 		return;
 	end
 
 	local model = A.Button.ToModel(button);
-	if (model.deleted) then
+	if (model.deleted or model.disabled) then
 		return false, model, false;
 	end
 
+	-- local visible = model:IsVisible();
+	-- if (not visible and model:IsShown()) then
+	-- 	if (not InCombatLockdown()) then
+	-- 		model:Hide();
+	-- 	end
+	-- 	return true, model, false;
+	-- elseif (visible and model:IsHidden()) then
+	-- 	if (not InCombatLockdown()) then
+	-- 		model:Show();
+	-- 	end
+	-- end
+
 	local barModel = model:GetParentBarModel();
+	local buttonsInLine = barModel:GetOption('buttonsInLine', 12);
 	local bar = barModel.item;
 
 	model:InitializeButton();
@@ -971,7 +1017,7 @@ A.Button.Build = function (button, index)
 	local firstInLine = false;
 
 	if (index ~= nil) then
-		firstInLine = math.fmod(index, bar.buttonsInLine) == 0;
+		firstInLine = math.fmod(index, buttonsInLine) == 0;
 		model.index = index;
 	end
 
@@ -980,7 +1026,6 @@ A.Button.Build = function (button, index)
 	if (button.bar) then
 		A.Bar.Build(button.bar);
 	end
-
 
 	model:SetupButtonFrame();
 	model:UpdateButtonFrame();
@@ -1027,31 +1072,39 @@ A.Button.getButtonFrame = function(button)
 end
 
 
-A.Button.BuildAttributes = function(thingType, thingId)
+A.Button.BuildAttributes = function(thingType, thingId, debug)
+
 	local info;
 	local isRealButton = type(thingType) == "table";
 	local cacheForced;
 	local btn;
+	local btnInfo = {};
 	if (isRealButton) then
 		btn = thingType;
 		cacheForced = thingId == true;
 		thingId = thingType.typeName;
 		thingType = thingType.type;
+		btnInfo = btn.info;
 	end
 	if (isRealButton and not thingType) then
 		return A.Button.Empty();
 	elseif (thingType == "spell") then
-		local sa, sb = GetSpellBookItemInfo(thingId, "");
-		--print("#", sa, sb, " -- ", thingId);
-		if (type(sb) == "number") then
-			info = _.GetSpellInfoTable(sb);
-		elseif (btn) then
-			info = btn.info;
+
+		local spellId = isRealButton and btnInfo.id;
+
+		if (not spellId) then
+			spellId = select(2, GetSpellBookItemInfo(thingId, BOOKTYPE_SPELL));
+		end
+		if (type(spellId) == "number") then
+			info = _.GetSpellInfoTable(spellId);
+		elseif (isRealButton) then
+			info = _.cloneTable(btnInfo);
 		else
 			info = {
 				name = thingId
 			}
 		end
+
 		return {
 			type = "spell",
 			typeName = info.name,

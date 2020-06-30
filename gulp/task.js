@@ -11,6 +11,25 @@ const flagsEnum = {
 	toc: 8,
 }
 
+const libsToCopy = [
+	{
+		base: '../../Tabu',
+		paths: [
+			"../GetSpellCountFix/**/*", 
+			"../Tabu/**/*"			
+		]
+	},
+	{
+		base: '../../Ace',
+		paths: [
+			"../../Ace/LibStub/**/*",
+			"../../Ace/CallbackHandler-1.0/**/*",
+			"../../Ace/LibSharedMedia-3.0/**/*"		
+		]
+	},
+]
+
+
 flagsEnum.all = flagsEnum.clean | flagsEnum.libs | flagsEnum.sources | flagsEnum.toc;
 
 function createTask(destFolder, flags, ...cbs) {
@@ -22,8 +41,17 @@ function createTask(destFolder, flags, ...cbs) {
 	}
 
 	const libs = () => {
-		return src(["../GetSpellCountFix/**/*", "../Tabu/**/*"], { base: "../../Tabu"})
-		.pipe(dest(destFolder + "/Libs"));
+
+		let tasks = _.map(libsToCopy, cntx => {
+			return () => {
+				return src(cntx.paths, { base: cntx.base })
+				.pipe(dest(destFolder + "/Libs"));
+			}
+		});
+		return tasks;
+
+		// return src(libsToCopy, { base: "../../Tabu"})
+		// .pipe(dest(destFolder + "/Libs"));
 	};
 
 	const sources = () => {
@@ -50,7 +78,7 @@ function createTask(destFolder, flags, ...cbs) {
 	}
 
 	if ((flags & flagsEnum.libs) == flagsEnum.libs) {
-		arr.push(libs);
+		arr.push(...libs());
 	}
 
 	if ((flags & flagsEnum.sources) == flagsEnum.sources) {

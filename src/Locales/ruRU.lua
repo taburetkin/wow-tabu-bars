@@ -45,4 +45,11 @@ A:CreateLocale("ruRU", {
 	["Character button"] = "Кнопка Информация о персонаже",
 	["Dragging element"] = "Перетаскиваемый элемент",
 	["Bar background color"] = "Цвет фона панели",
+	["Bar defaults"] = "Настройки панели",
+	["Button defaults"] = "Настройки кнопки",
+	["SHIFT-RightButton for swap with parent button"] = "Шифт-ПКМ поменяет местами эту кнопку с \"родительской\"",
+	["Count text font"] = "Шрифт индикатора \"Количество\"",
+	["Count text size"] = "Размер шрифта индикатора \"Количество\"",
+	["HotKey text font"] = "Шрифт индикатора \"HotKey\"",
+	["HotKey text size"] = "Размер шрифта индикатора \"HotKey\"",
 });

@@ -23,6 +23,10 @@ A.Models.ToModel = function(id, Mixin, debug)
 	return model;
 end
 
+A.Models.GetById = function(id)
+	return models[id];
+end
+
 local stores = {};
 local addToStore = function(self, item, id)
 	if (not id) then

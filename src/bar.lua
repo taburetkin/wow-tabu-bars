@@ -27,7 +27,7 @@ local BarFrameMixins = {
 		sbg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", size, -size);
 		--A.Frames.CreateColorTexture(sbg, 1,1,0,0.2);
 		sbg:Hide();
-	
+
 		sbg:SetFrameRef("common", A.COMMONFRAME);
 	
 		sbg.hidePopups = function()
@@ -108,22 +108,27 @@ local BarMixin = {
 		if (parentButton) then
 			--print('# 0', type(parentBar), parentButton.id, parentButton.barId);
 			local pgrow = A.Grows.Get(parentBar.grow);
-			bar.grow = bar.grow or parentBar.grow;
-			bar.attachSide = bar.attachSide or pgrow.dir[2]; 
-			buttonsInLine = parentBar. buttonsInLine
+
+			-- bar.grow = bar.grow or parentBar.grow;
+			-- bar.attachSide = bar.attachSide or pgrow.dir[2]; 
+
+			buttonsInLine = parentBar.buttonsInLine
 			buttonSize = parentBar.buttonSize
 			padding = parentBar.padding
 			spacing = parentBar.spacing
 			alignCenter = parentBar.alignCenter
 		else
-			bar.grow = bar.grow or defaultGrowId;
-			bar.point = bar.point or "CENTER";
+			-- bar.grow = bar.grow or defaultGrowId;
+			-- bar.point = bar.point or "CENTER";
 		end
-		bar.buttonsInLine = bar.buttonsInLine or buttonsInLine;
-		bar.buttonSize = bar.buttonSize or buttonSize;
-		bar.padding = bar.padding or padding;
-		bar.spacing = bar.spacing or spacing;
-		bar.alignCenter = bar.alignCenter or alignCenter;
+
+
+
+		-- bar.buttonsInLine = bar.buttonsInLine or buttonsInLine;
+		-- bar.buttonSize = bar.buttonSize or buttonSize;
+		-- bar.padding = bar.padding or padding;
+		-- bar.spacing = bar.spacing or spacing;
+		-- bar.alignCenter = bar.alignCenter or alignCenter;
 		
 	end,
 
@@ -183,15 +188,21 @@ local BarMixin = {
 
 	end,
 	SetupLook = function(self)
-		local bar = self.item;
+		--local bar = self.item;
 		local frame = self:GetBarFrame();
-		local parent = self:GetParentBarBar();
+		--local parent = self:GetParentBarBar();
 
-		local bg = bar.background or (parent and parent.background) or {0,0,0,.8};
+		local bg = self:GetOption('background', {0,0,0,.8});
+		--Tabu.print(bg);
 		frame.bg:SetColorTexture(unpack(bg));
 
 	end,
 	UpdateBarPosition = function (self)
+		local inCombat = InCombatLockdown();
+		if (inCombat and not self.indicator) then
+			return;
+		end
+
 		local bar = self.item;
 		local frame = self:GetBarFrame();
 		local point, offsetX, ofssetY, relativeToParent;
@@ -200,29 +211,31 @@ local BarMixin = {
 		frame:ClearAllPoints();
 	
 		if (bar.isNested) then
-
+			local parentBarModel = self:GetParentBarModel();
+			local parentGrow = parentBarModel:GetOption('grow', 'rightDown');
 			parentFrame = self:GetParentButtonFrame();
 
 			local owngrowid = bar.grow;
-			local growid = bar.grow or "rightDown";
+			local growid = self:GetOption('grow', 'rightDown'); --bar.grow or "rightDown";
 
 			local grow = A.Grows.Get(growid);
-			local side = bar.attachSide;
+			local side = self:GetOption('attachSide', 'BOTTOM');
 	
 			if (growid ~= owngrowid) then
-				bar.grow = growid;
+				--bar.grow = growid;
 				if (not _.arrayHasValue(grow.dir, sid)) then
-					bar.attachSide = grow.dir[1];
-					side = bar.attachSide;
+					side = grow.dir[2];
+					-- bar.attachSide = grow.dir[1];
+					-- side = bar.attachSide;
 				end
 			end
 	
-			local center = bar.alignCenter;
+			--local center = bar.alignCenter;
 			local offsetX = 0;
 			local offsetY = 0;
 
-			local parentPad = parentBar.padding;
-			local popupPad = bar.padding;
+			local parentPad = parentBarModel:GetOption('padding', 0);
+			local popupPad = self:GetOption('padding', 0);
 
 			local hg = A.Grows.hgrow(grow.dir);
 			local ohg = A.Grows.oppositeSide(hg);
@@ -249,9 +262,9 @@ local BarMixin = {
 			frame:SetPoint(point, parentFrame, relativeToParent, offsetX, offsetY);
 			frame:SetFrameLevel(parentFrame:GetFrameLevel() + 1);
 		else
-			point = bar.point or "CENTER";
-			offsetX = bar.posX or 0;
-			offsetY = bar.posY or 0;
+			point = self:GetOption('point','CENTER');
+			offsetX = self:GetOption('posX',0);
+			offsetY = self:GetOption('posY',0);
 			frame:SetPoint(point, offsetX, offsetY);
 		end
 	end,
@@ -271,9 +284,10 @@ local BarMixin = {
 		if (lastOne:IsHidden()) then
 			items = items - 1;
 		end
-		local lines = math.modf((items > 0 and items - 1 or 0) / bar.buttonsInLine) + 1;
-		if (items > bar.buttonsInLine) then
-			items = bar.buttonsInLine
+		local buttonsInLine = self:GetOption('buttonsInLine', 12);
+		local lines = math.modf((items > 0 and items - 1 or 0) / buttonsInLine) + 1;
+		if (items > buttonsInLine) then
+			items = buttonsInLine
 		elseif (items == 0) then
 			items = 1
 		end
@@ -281,20 +295,26 @@ local BarMixin = {
 	end,
 
 	ResizeBar = function (self)
+		local inCombat = InCombatLockdown();
+		if (inCombat and not self.indicator) then
+			return;
+		end
+
 		local bar = self.item;
 		local lines, items = self:GetBarLinesAndItems();
-		local padding = bar.padding;
-		local spacing = bar.spacing;
+		local padding = self:GetOption('padding',0);
+		local spacing = self:GetOption('spacing',0);
 		local width = items;
 		local height = lines;
-		local grow = A.Grows.Get(bar.grow);
+		local grow = A.Grows.Get(self:GetOption('grow', 'rightDown'));
 		local rev = grow.axisReverted == true;
 		if (rev) then
 			width = lines;
 			height = items;
 		end
-		width = width * bar.buttonSize + padding*2 + (width - 1)*spacing;
-		height = height * bar.buttonSize + padding*2 + (height - 1)*spacing;
+		local buttonSize = self:GetOption('buttonSize', 36);		
+		width = width * buttonSize + padding*2 + (width - 1)*spacing;
+		height = height * buttonSize + padding*2 + (height - 1)*spacing;
 		local frame = self:GetBarFrame();
 		frame:SetSize(width, height);	
 	end,
@@ -363,6 +383,9 @@ local BarMixin = {
 	end,
 
 	BuildButtons = function (self, iteration)
+
+		if (InCombatLockdown()) then return end;
+
 		local bar = self.item;
 
 		local btns = self:GetButtons();
@@ -379,17 +402,18 @@ local BarMixin = {
 			realIndex = realIndex + 1;
 			button.index = realIndex;
 			local valid, btnModel, firstInLine = A.Button.Build(button, index);
-
 			if (valid) then
-				if (self.lastButton and self.lastButton:IsActive()) then
-					self.lastButton:Show();
+				if (btnModel:IsVisible()) then
+					if (self.lastButton and self.lastButton:IsActive()) then
+						self.lastButton:Show();
+					end
+					self.lastButton = btnModel;
+					if (firstInLine) then
+						self.lastLineFirstButton = btnModel;
+					end
+					index = index + 1;
+					self.buttonsCount = index;
 				end
-				self.lastButton = btnModel;
-				if (firstInLine) then
-					self.lastLineFirstButton = btnModel;
-				end
-				index = index + 1;
-				self.buttonsCount = index;
 				table.insert(newbtns, button);
 			end
 		end
@@ -403,10 +427,9 @@ local BarMixin = {
 
 		if (self.buttonsCount == 1) then
 			self.lastButton:Show();
-		elseif (self.buttonsCount > 1 and self.lastButton:IsEmpty()) then
+		elseif (self.buttonsCount > 1 and self.lastButton:IsEmpty() and not A.isDragging()) then
 			self.lastButton:Hide();
 		end
-
 	end,
 
 	AddButton = function (self, kind, raw)
@@ -424,7 +447,7 @@ local BarMixin = {
 			kind = "add";
 		end
 		if (raw) then
-			raw = A.Button.BuildAttributes(raw.type, raw.typeName);
+			raw = A.Button.BuildAttributes(raw.type, raw.typeName, 'Bar:AddButton');
 		end
 
 		local newbtn;
@@ -436,7 +459,9 @@ local BarMixin = {
 		if (kind == "add") then
 			if (buttonsCount <= 1 or not self.lastButton:IsEmpty()) then
 				newbtn = A.Button.NewButton(self.item);
-				_.mixin(newbtn.item, raw);
+				if (type(raw) == 'table') then
+					_.mixin(newbtn.item, raw);
+				end
 				table.insert(buttons, newbtn.item);
 			else
 				if (raw) then
@@ -486,6 +511,12 @@ local BarMixin = {
 		end
 	end,
 
+
+	GetOption = function(self, key, def)
+		local pb = self:GetParentBarModel();
+		return A.GetDefaultValue('bar', key, self.item, pb and pb:GetOption(key) or nil, def);
+	end,
+
 	GetFirstAvailableButton = function(self)
 		local start, dur, en;
 		for x, button in ipairs(self.item.buttons) do
@@ -508,7 +539,9 @@ local BarMixin = {
 	GetFirstAvailableButtonData = function(self)
 		local btn = GetFirstAvailableButton() or self.item.buttons[1];
 		return btn.attrs, btn.info
-	end
+	end,
+
+
 
 }
 
@@ -530,6 +563,7 @@ A.Bar.ToModel = function (bar)
 end
 
 A.Bar.Build = function (bar, index)
+
 	if (not bar) then
 		_.print("Bar.Build nil argument");
 		return;
@@ -538,18 +572,22 @@ A.Bar.Build = function (bar, index)
 		bar.index = index;
 	end
 	local model = A.Bar.ToModel(bar);
-	if (model.deleted) then
+	if (model.deleted or bar.disabled) then
 		return;
 	end
 
-
-	model:SetBarDefaults();
+	
+	--model:SetBarDefaults();
 	model:InitializeBarFrame();
 	model:SetupLook();
 	model:BuildButtons();
+
+	-- combat locked:
 	model:ResizeBar();
 	model:UpdateBarPosition();
+
 	model.builded = true;
+
 	return model.item;
 end
 
@@ -777,19 +815,22 @@ A.Bar.HideLastButtons = function ()
 end
 
 local function RefreshBarButtons(bar)
-	for x, button in pairs(bar.buttons or {}) do
+	--if (InCombatLockdown()) then return end;
+	local barModel = A.Bar.ToModel(bar);
+	local btns = barModel:GetButtons();
+	for x, button in pairs(btns) do
 		local model = A.Button.ToModel(button);
 		model:UpdateButtonFrame();
 		if (button.bar) then
 			RefreshBarButtons(button.bar);
 		end
-
 	end
 end
 
 local function RefreshButtons()
 	local db = Cache().bars;
 	for x, bar in pairs(db) do
+		--A.Bar.Build(bar);
 		RefreshBarButtons(bar);
 	end
 
@@ -799,6 +840,19 @@ A.Bar.RefreshButtonsOn = function(events)
 	for x, event in pairs(events) do
 		A.Bus.On(event, RefreshButtons);
 	end
+end
+
+A.Bar.Iterate = function(callback)
+	local db = Cache().bars;
+	for x, bar in pairs(db) do
+		callback(bar);
+	end
+end
+A.Bar.Disable = function(bar)
+	bar.disabled = true;
+end
+A.Bar.Enable = function(bar)
+	bar.disabled = false;
 end
 
 -- A.Bar.SpellBookTabSpellsButtons = function(barModel)

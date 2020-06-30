@@ -1,4 +1,12 @@
 local A, _, L = Tabu:Spread(...);
+A.Lib = {};
+
+A.AddLib = function(key, name)
+	A.Lib[key] = LibStub(name);
+end
+
+A.AddLib('SharedMedia','LibSharedMedia-3.0');
+
 
 A.COMMONFRAME = CreateFrame("Frame", nil, UIParent, "SecureHandlerAttributeTemplate");
 
@@ -75,18 +83,18 @@ local function getDraggingInfoFrame(btn)
 end
 A.GetDragItem = function()
 	local thingType, id = GetCursorInfo();
-	if (A.pickedUpButton) then
+	if (A.pickedUpButton and not thingType) then
 		thingType = A.pickedUpButton.type;
 		id = A.pickedUpButton.typeName;
 	end
-	return A.Button.BuildAttributes(thingType, id);	
+	return A.Button.BuildAttributes(thingType, id, 'GetDragItem');	
 end
 
 A.dragStart = function(btn, native)
 	if (not btn) then
 		A.nativeDragging = true;
 		local thingType, id = GetCursorInfo();
-		btn = A.Button.BuildAttributes(thingType, id);
+		btn = A.Button.BuildAttributes(thingType, id, 'dragStart without button');
 	end
 	A.nativeDragging = btn.type == "spell" or btn.type == "macro" or btn.type == "item";
 	A.pickedUpButton = btn;
@@ -116,28 +124,4 @@ A.ClearCursor = function()
 	ClearCursor();
 end
 
-local defOptions = {
-	bg = { 0, 0, 0, .8, "BACKGROUND" },
-	border = { 0, 0, 0, 1 }
-}
-_.createDialogFrame = function(opts, frameType, frameName, frameParent, alsoInherits)
 
-	local options = _.cloneTable(defOptions);
-	_.mixin(options, opts or {});
-
-	local inherits = "Tabu_DialogTemplate";
-	if (alsoInherits) then
-		inherits = inherits .. ", " .. alsoInherits;
-	end
-	frameType = frameType or "Frame";
-	frameParent = frameParent or UIParent;
-
-	local fr = CreateFrame(frameType, frameName, frameParent, inherits);
-	if (options.bg) then
-		_.createColorTexture(fr, unpack(options.bg));
-	end
-	if (options.border) then
-		_.setFrameBorder(fr, unpack(options.border));
-	end
-	return fr;
-end
