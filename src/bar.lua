@@ -2,6 +2,8 @@ local A, _, L, Cache = Tabu:Spread(...);
 A.Bar = {}
 
 
+local LEVELS_PER_BAR = 7;
+
 
 local getBarSideOffset = function (value, growTo, side)
 	if 
@@ -19,72 +21,171 @@ end
 local BarFrameMixins = {
 	CreateSecureBg = function (self, barid)
 		local frame = self;
-		local sbg = CreateFrame("Frame", _.buildFrameName(barid.."SECBG"), frame, "SecureHandlerEnterLeaveTemplate");
+		local sbg = CreateFrame("Frame", _.buildFrameName(barid.."SECBG"), frame, "SecureHandlerEnterLeaveTemplate, SecureHandlerShowHideTemplate");
 		local size = 100;
-		sbg:SetFrameLevel(UIParent:GetFrameLevel());
+		local frameLevel = self:GetFrameLevel() - 1;
+		sbg:SetFrameLevel(frameLevel);
+		--_.print('#', sbg:GetName(), frameLevel);
 		frame.sbg = sbg;
+
+		frame:SetFrameRef("sbg", sbg);
+
 		sbg:SetPoint("TOPLEFT", frame, "TOPLEFT", -size, size);
 		sbg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", size, -size);
-		--A.Frames.CreateColorTexture(sbg, 1,1,0,0.2);
+		--_.createColorTexture(sbg, 1,1,0,0.2);
 		sbg:Hide();
 
 		sbg:SetFrameRef("common", A.COMMONFRAME);
 	
+		A.COMMONFRAME:SetFrameRef("bar_sbg_"..sbg:GetName(), sbg);
+
 		sbg.hidePopups = function()
 			A.Popup.HideAll();
 		end
-	
+
+		local model = A.Bar.ToModel(barid);
+		-- local parentModel = model:GetParentBarModel();
+		-- local indx = 1;
+		-- while (parentModel) do
+		-- 	local pbf = parentModel:GetBarFrame();
+		-- 	if (pbf and pbf.sbg) then
+		-- 		sbg:SetFrameRef('parent_sbg_'..indx, pbf.sbg);
+		-- 		indx = indx + 1;
+		-- 	end
+		-- 	parentModel = parentModel:GetParentBarModel();
+		-- end
+		--local parentModel = self:GetParentBarModel();
+
 		sbg:SetAttribute("_onenter", [=[
-			self:Hide();
+			self:SetAttribute("hide_reason", "selfHide");
+			
+			
 			local cmn = self:GetFrameRef("common");
-			if (not cmn) then return end;
-			local i = 1;
-			local popup = cmn:GetFrameRef("popup_"..i);
-			while(popup) do
-				popup:Hide();
-				i = i + 1;
-				popup = cmn:GetFrameRef("popup_"..i);
+			local openedPopupNames = cmn:GetAttribute("openedPopups") or "";
+			if openedPopupNames ~= "" then
+				local opn = newtable(strsplit(" ", openedPopupNames));
+				for i, openedPopupName in pairs(opn) do
+					local openedPopup = cmn:GetFrameRef("popup_"..openedPopupName);
+					openedPopup:Hide();
+				end
 			end
-		]=])
-	
+
+			cmn:SetAttribute("openedPopups", "");
+
+			if (self:IsShown()) then
+				self:SetAttribute("hide_reason", "selfHide");
+				self:Hide();
+			end
+
+		]=]);
+
+		if (model:IsRoot()) then
+			sbg:SetFrameRef("barframe", frame);
+			sbg:SetAttribute("_onhide", [=[
+				local reason = self:GetAttribute("hide_reason") or "";
+				self:SetAttribute("hide_reason", "");
+
+				if (reason ~= "selfHide") then return end;
+
+				local pb = self:GetFrameRef('barframe');
+				local should = pb:GetAttribute("enterLeaveVisible");
+				if (not should) then return end
+				pb:SetAlpha(0);
+			]=]);
+			-- sbg:SetScript("OnHide", function(self) 
+			-- 	--local pb = frame:GetFrameRef('parent_bar');
+			-- 	local should = frame:GetAttribute("enterLeaveVisible");
+			-- 	if (not should) then return end
+			-- 	self:SetAlpha(0);
+			-- end);
+		else
+			local rootBarFrame = model:GetRootBarFrame();
+			sbg:SetFrameRef("rootBarFrame", rootBarFrame);
+			sbg:SetAttribute("_onhide", [=[
+				local reason = self:GetAttribute("hide_reason") or "";
+
+				self:SetAttribute("hide_reason", "");
+
+				if (reason ~= "selfHide") then return end;
+
+				local pb = self:GetFrameRef('rootBarframe');
+				local sbg = pb:GetFrameRef("sbg");
+				sbg:Show();
+				sbg:SetAttribute("hide_reason", "selfHide");
+
+				sbg:Hide();
+
+			]=])
+		end
+	end,
+	SetupVisibilityBehavior = function(frame, model)
+
+		-- show on mouseover
+		frame:SetAttribute("_onenter", [=[
+			local should = self:GetAttribute("enterLeaveVisible");
+			if (not should) then return end
+			self:SetAlpha(1);
+		]=]);
+
+		-- show on combat/peace
+		frame:SetAttribute("_onstate-combat", [=[
+			local incombat = self:GetAttribute("combatVisible");
+			local inpeace = self:GetAttribute("peaceVisible");
+			if (incombat == true and inpeace == true) then
+				return;
+			end
+			if newstate == "combat" then
+				if incombat == true then
+					self:Show();
+				elseif inpeace == true then
+					self:Hide();
+				end
+			else
+				if incombat == true then
+					self:Hide();
+				elseif inpeace == true then
+					self:Show();
+				end
+			end
+		]=]);
+		RegisterStateDriver(frame, 'combat', '[combat] combat; peace');
+
+	end,
+	CreateDraggableFrame = function(frame, model)
+		if (model.frames.draggable) then return end;
+
+		frame:SetMovable(true);
+		local df = CreateFrame("Button", nil, frame);
+		_.createColorTexture(df, 0,1,0,.5);
+		df:SetAllPoints();
+		df:SetFrameLevel(frame:GetFrameLevel() + 100);
+		df:Hide();
+		df:SetScript("OnShow", function() 
+			model.unlocked = true;
+		end);
+		df:SetScript("OnHide", function() 
+			model.unlocked = false;
+		end);
+		df:RegisterForClicks("AnyUp");
+		df:RegisterForDrag("LeftButton");
+		df:SetScript("OnClick", function(self, button) 
+			if (button == "RightButton") then
+				self:Hide();
+			end
+		end);
+		df:SetScript("OnDragStart", function() 
+			frame:StartMoving();
+		end)
+		df:SetScript("OnDragStop", function() 
+			frame:StopMovingOrSizing();
+			local point, rlTo, rlPoint, posX, posY = frame:GetPoint(1);
+			model.item.point = point;
+			model.item.posX = posX;
+			model.item.posY = posY;
+		end)
+		model.frames.draggable = df;
 	end
 }
-
-
-local function createDraggableFrame(model, frame)
-	if (model.frames.draggable) then return end;
-
-	frame:SetMovable(true);
-	local df = CreateFrame("Button", nil, frame);
-	_.createColorTexture(df, 0,1,0,.5);
-	df:SetAllPoints();
-	df:SetFrameLevel(frame:GetFrameLevel() + 100);
-	df:Hide();
-	df:SetScript("OnShow", function() 
-		model.unlocked = true;
-	end);
-	df:SetScript("OnHide", function() 
-		model.unlocked = false;
-	end);
-	df:RegisterForClicks("AnyUp");
-	df:RegisterForDrag("LeftButton");
-	df:SetScript("OnClick", function(self, button) 
-		if (button == "RightButton") then
-			self:Hide();
-		end
-	end);
-	df:SetScript("OnDragStart", function() 
-		frame:StartMoving();
-	end)
-	df:SetScript("OnDragStop", function() 
-		frame:StopMovingOrSizing();
-		local point, rlTo, rlPoint, posX, posY = frame:GetPoint(1);
-		model.item.point = point;
-		model.item.posX = posX;
-		model.item.posY = posY;
-	end)
-	model.frames.draggable = df;
-end
 
 local BarMixin = {
 	SetBarDefaults = function (self)
@@ -139,7 +240,9 @@ local BarMixin = {
 			return true;
 		end
 	end,
-
+	IsRoot = function(self)
+		return self.item.isNested ~= true;
+	end,
 	Lock = function(self)
 		if (A.Locked("LockBar") or self.item.isNested) then return end;
 		self.frames.draggable:Hide();
@@ -158,45 +261,184 @@ local BarMixin = {
 		self.frames.bar = frame;
 	end,
 
+
+
+	-- local barShowOns = {
+	-- 	["always"] = 0, 
+	-- 	["when mouse over"] = 1, 
+	-- 	["when alt pressed"] = 2, 
+	-- 	["when shift pressed"] = 4, 
+	-- 	["when control pressed"] = 8, 
+	-- 	["when in combat"] = 16,
+	-- 	["when not in combat"] = 32,
+	-- 	["never"] = -1
+	-- }	
+
+	SetupVisibility = function(self)
+		local vis = self:GetOption('showConditions', 0);
+
+		self.visibility = {};
+		if (vis == -1) then 
+			self.hidden = true;
+			return;
+		end;
+		self.hidden = nil;
+		if (vis == 0) then 
+			return 
+		end;
+
+		if (bit.band(vis, 1) > 0) then
+			self.visibility.mouseOver = true;
+		else
+			self.visibility.mouseOver = false;
+		end
+
+		if (bit.band(vis, 2) > 0) then
+			self.visibility.alt = true;
+		else
+			self.visibility.alt = false;
+		end
+
+		if (bit.band(vis, 4)> 0) then
+			self.visibility.shift = true;
+		else
+			self.visibility.shift = false;
+		end		
+
+		if (bit.band(vis, 8)> 0) then
+			self.visibility.cntrl = true;
+		else
+			self.visibility.cntrl = false;
+		end	
+
+		if (bit.band(vis, 16)> 0) then
+			self.visibility.inCombat = true;
+		else
+			self.visibility.inCombat = false;
+		end	
+
+		if (bit.band(vis, 32)> 0) then
+			self.visibility.inPeace = true;
+		else
+			self.visibility.inPeace = false;
+		end	
+
+		if (self.visibility.inPeace or self.visibility.inCombat) then
+			self.visibility.stateDriver = true;
+		else
+			self.visibility.stateDriver = false;
+		end
+
+
+	end,
+
+	InitializeBar = function(self)
+		--initialize visibility;
+		self:SetupVisibility();
+	end,
+
+	SetupBarFrame = function(self, onOptionsChange)
+		local isRootBar = self:IsRoot(); --self.item.isNested ~= true;
+		if (not (isRootBar and onOptionsChange)) then return end
+
+		local shouldHide;
+		local shouldShow;
+		local frame = self:GetBarFrame();
+		local shown = frame:IsShown();
+		local action;
+
+		frame:SetAttribute("enterLeaveVisible", self.visibility.mouseOver);
+		frame:SetAlpha(self.visibility.mouseOver and 0 or 1);
+		-- if (self.visibility.mouseOver ~= nil) then
+		-- 	frame:SetAlpha(self.visibility.mouseOver and 0 or 1);
+		-- else
+		-- end
+
+		if (
+			(self.visibility.inCombat == true and self.visibility.inPeace == true)
+			or
+			(self.visibility.inCombat == nil and self.visibility.inPeace == nil)
+		) then
+			frame:SetAttribute("combatVisible", true);
+			frame:SetAttribute("peaceVisible", true);
+			action = "show";
+			-- not specified
+		elseif self.visibility.inCombat == true then
+			frame:SetAttribute("combatVisible", true);
+			frame:SetAttribute("peaceVisible", false);
+			action = "hide";
+		elseif self.visibility.inPeace == true then
+			frame:SetAttribute("combatVisible", false);
+			frame:SetAttribute("peaceVisible", true);
+			action = "show";
+		end
+
+
+		if (not InCombatLockdown()) then
+			if (shown and (self.hidden or action == "hide")) then
+				frame:Hide();
+			elseif (not shown and not self.hidden and action == "show") then
+				frame:Show();
+			end
+		end
+	end,
+
+	SetupChildButton = function(self, model, onOptionsChange)
+		local parent = self:GetBarFrame();
+		local frame = model:GetButtonFrame();
+		frame:SetFrameRef('parentBar', parent);
+		if (self:IsRoot()) then
+			frame:SetFrameRef('rootBar', parent);
+		end
+	end,
+
 	InitializeBarFrame = function (self)
 		if (self.builded) then return end;
-
+		local isRoot = self:IsRoot();
 		local bar = self.item;
 		local point = bar.point;
 		local posX = bar.posX;
 		local posY = bar.posY;
 		local parentFrame = self:GetParentButtonFrame();
-		local frame = CreateFrame("Frame", _.buildFrameName(bar.id), parentFrame or UIParent, "SecureHandlerBaseTemplate");	
+		local parentBarFrame = self:GetParentBarBarFrame();
+		local frame = CreateFrame("Frame", _.buildFrameName(bar.id), parentFrame or UIParent, "SecureHandlerBaseTemplate, SecureHandlerEnterLeaveTemplate, SecureHandlerShowHideTemplate, SecureHandlerStateTemplate");	
 		_.mixin(frame, BarFrameMixins, "InitBarFrame");
 		self:SetBarFrame(frame);
 
 		frame:EnableMouse(true);
-		frame:SetFrameLevel(UIParent:GetFrameLevel() + 2);
+
 		frame:SetSize(1, 1);
 		frame.bg = _.createColorTexture(frame, 0,0,0, 0);
 
 		frame:CreateSecureBg(bar.id);
+		local parentPopupNames = self:GetParentPopupNamesAsString();
+		frame:SetAttribute("parentPopupNames", parentPopupNames);
+		frame:SetFrameRef("common", A.COMMONFRAME);
 
-		if (bar.isNested) then
-			A.Models.StoreAdd("popups", frame, self.id);
-			-- local index = A.Models.StoreAdd("popups", frame, self.id);
-			-- TabuBars.COMMONFRAME:SetFrameRef("popup_"..index, frame);
-			frame:Hide();
+		if (isRoot) then
+			frame:CreateDraggableFrame(self);
+			frame:SetupVisibilityBehavior(self);
 		else
-			createDraggableFrame(self, frame);
+			A.COMMONFRAME:SetFrameRef("popup_"..frame:GetName(), frame);
+			--A.Models.StoreAdd("popups", frame, self.id);
+			frame:Hide();
 		end
 
+		self:SetupBarFrame(true);
+
 	end,
+
 	SetupLook = function(self)
 		--local bar = self.item;
 		local frame = self:GetBarFrame();
 		--local parent = self:GetParentBarBar();
 
-		local bg = self:GetOption('background', {0,0,0,.8});
+		local bg = self:GetOption('background', { 0, 0, 0, 0 });
 		--Tabu.print(bg);
 		frame.bg:SetColorTexture(unpack(bg));
 
 	end,
+
 	UpdateBarPosition = function (self)
 		local inCombat = InCombatLockdown();
 		if (inCombat and not self.indicator) then
@@ -241,7 +483,7 @@ local BarMixin = {
 			local ohg = A.Grows.oppositeSide(hg);
 			local vg = A.Grows.vgrow(grow.dir);
 			local ovg = A.Grows.oppositeSide(vg);
-	
+			local oppositeSide = A.Grows.oppositeSide(side);
 			if (side == ohg or side == ovg) then
 				_.print("NOT ALLOWED Side for current grow");
 				side = grow.dir[1];
@@ -258,7 +500,13 @@ local BarMixin = {
 				offsetX =  getBarSideOffset(popupPad, hg, side);
 				offsetY = getBarSideOffset(0, vg, side);
 			end
-			
+			local shouldCenter = self:GetOption('anchorOnCenter', false);
+			if (shouldCenter) then
+				point = oppositeSide;
+				relativeToParent = side;
+				offsetX, offsetY = 0, 0;
+			end
+			--print("#", point, relativeToParent, growid);
 			frame:SetPoint(point, parentFrame, relativeToParent, offsetX, offsetY);
 			frame:SetFrameLevel(parentFrame:GetFrameLevel() + 1);
 		else
@@ -347,6 +595,33 @@ local BarMixin = {
 		if (not btnModel) then return end;
 		return btnModel:GetButtonFrame();
 	end,
+
+	GetParentPopupNamesAsString = function(self)
+		if (self:IsRoot()) then return "" end;
+		local parent = self:GetParentBarModel();
+		if (not parent) then return "" end;
+		local name = self:GetBarFrame():GetName();
+		local names = parent:GetParentPopupNamesAsString();
+		if (names ~= "") then
+			names = names .. " ";
+		end
+		return names .. name;
+	end,
+
+	GetRootBarModel = function(self)
+		if (self:IsRoot()) then
+			return self;
+		else
+			local parent = self:GetParentBarModel();
+			if not parent then return end;
+			return parent:GetRootBarModel();
+		end
+	end,
+	GetRootBarFrame = function(self)
+		local model = self:GetRootBarModel();
+		return model and model:GetBarFrame() or nil;
+	end,
+
 	--#endregion
 
 	--#region Buttons
@@ -356,6 +631,7 @@ local BarMixin = {
 	IsAuto = function(self)
 		return not self:IsNotAuto();
 	end,
+
 	GetAutomaticButtons = function(self)
 		local bar = self.item;
 		local type = bar.automatic.type;
@@ -368,6 +644,7 @@ local BarMixin = {
 		end
 		return {};
 	end,
+
 	GetButtons = function(self)
 		local bar = self.item;
 		if (self:IsNotAuto()) then
@@ -382,14 +659,11 @@ local BarMixin = {
 		end
 	end,
 
-	BuildButtons = function (self, iteration)
+	BuildButtons = function (self, onOptionsChange)
 
-		if (InCombatLockdown()) then return end;
 
 		local bar = self.item;
-
 		local btns = self:GetButtons();
-
 		table.sort(btns, function(a,b) return (a.index or 1000) < (b.index or 1000) end);
 
 		local index = 0;
@@ -416,6 +690,9 @@ local BarMixin = {
 				end
 				table.insert(newbtns, button);
 			end
+
+			self:SetupChildButton(btnModel, onOptionsChange);
+
 		end
 		self:SetButtons(newbtns);
 		
@@ -483,8 +760,8 @@ local BarMixin = {
 		self:AddButton(raw);
 	end,
 
-	Rebuild = function(self)
-		A.Bar.Build(self.item);
+	Rebuild = function(self, optionsChanged)
+		A.Bar.Build(self.item, nil, optionsChanged);
 	end,
 	--endregion
 
@@ -513,8 +790,13 @@ local BarMixin = {
 
 
 	GetOption = function(self, key, def)
-		local pb = self:GetParentBarModel();
-		return A.GetDefaultValue('bar', key, self.item, pb and pb:GetOption(key) or nil, def);
+		local pb, parentBarValue = self:GetParentBarModel(), "";
+		if (pb) then
+			parentBarValue = pb:GetOption(key) or "";
+		end
+		local value = A.GetDefaultValue('bar', key, self.item, parentBarValue, def);
+
+		return value;
 	end,
 
 	GetFirstAvailableButton = function(self)
@@ -562,7 +844,7 @@ A.Bar.ToModel = function (bar)
 	return model;
 end
 
-A.Bar.Build = function (bar, index)
+A.Bar.Build = function (bar, index, optionsChanged)
 
 	if (not bar) then
 		_.print("Bar.Build nil argument");
@@ -572,15 +854,18 @@ A.Bar.Build = function (bar, index)
 		bar.index = index;
 	end
 	local model = A.Bar.ToModel(bar);
-	if (model.deleted or bar.disabled) then
+
+	if (not optionsChanged and (model.deleted or model.hidden or bar.disabled)) then
 		return;
 	end
 
 	
 	--model:SetBarDefaults();
+	model:InitializeBar(optionsChanged);
 	model:InitializeBarFrame();
+	model:SetupBarFrame(optionsChanged);
 	model:SetupLook();
-	model:BuildButtons();
+	model:BuildButtons(optionsChanged);
 
 	-- combat locked:
 	model:ResizeBar();
@@ -734,9 +1019,11 @@ local function updateBarButtonsRefs(bar, parentPopups)
 end
 
 A.Bar.UpdateButtonsRefs = function(data, parentPopups)
+
+	if (1 == 1) then return end
+
 	if (not data) then
-		data = Cache().bars;
-			
+		data = Cache().bars;			
 	end
 	local initial = not parentPopups;
 
@@ -854,6 +1141,55 @@ end
 A.Bar.Enable = function(bar)
 	bar.disabled = false;
 end
+
+A.Bar.ShowAllHidden = function(seconds)
+	if (type(seconds) ~= "number") then
+		seconds = 10;
+	end
+	if (InCombatLockdown()) then 
+		_.print("Not available in combat");
+		return 
+	end;
+	A.Bar.Iterate(function(bar) 
+		local model = A.Bar.ToModel(bar);
+		if (not model.builded) then
+			return;
+		end
+		local frame = model:GetBarFrame();
+		if (not frame) then return end;
+		local shown = frame:IsShown();
+		local alpha = frame:GetAlpha();
+		local visible = shown and alpha > 0;
+		if (visible) then return end;
+
+		if (not shown) then
+			frame:Show();
+		end
+		if (alpha ~= 1) then
+			frame:SetAlpha(1);
+		end
+
+		if (not frame.hideTimer) then
+			frame.hideTimer = CreateFrame("Cooldown", nil, frame);
+			frame.hideTimer:SetSize(24,24);
+			frame.hideTimer:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 0);
+		--else
+		end
+		frame.hideTimer:Show();
+		frame.hideTimer:SetCooldown(GetTime(), seconds);
+		--_.deprint('# show cd');
+		C_Timer.After(seconds, function() 
+			if (not shown and not InCombatLockdown()) then
+				frame.hideTimer:Hide();
+				frame:Hide();
+			end
+			if (alpha ~= 1) then
+				frame:SetAlpha(alpha);
+			end
+		end)
+	end);
+end
+
 
 -- A.Bar.SpellBookTabSpellsButtons = function(barModel)
 -- 	local bar = barModel.item;

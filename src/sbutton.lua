@@ -23,7 +23,7 @@ A.SButton = {
 						["macrotext"] = "/run ToggleHelpFrame()"
 					},
 					info = {
-						icon = iconsPath .. "Question-64x64", --, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Question-64x64-classic", --, --microIconsRoot .. "Help"
 						--twoChars = "H"
 					}
 				}
@@ -40,7 +40,7 @@ A.SButton = {
 						["macrotext"] = "/run GameMenuFrame:Show()"
 					},
 					info = {
-						icon = iconsPath .. "Computer-64x64", --, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Computer-64x64-classic", --, --microIconsRoot .. "Help"
 						--twoChars = "M"
 					}
 				}
@@ -57,7 +57,7 @@ A.SButton = {
 						["macrotext"] = "/run ToggleWorldMap()"
 					},
 					info = {
-						icon = iconsPath .. "Earth-64x64", --false, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Earth-64x64-classic", --false, --microIconsRoot .. "Help"
 						--twoChars = "W"
 					}
 				}
@@ -74,7 +74,7 @@ A.SButton = {
 						["macrotext"] = "/run ToggleFriendsFrame()"
 					},
 					info = {
-						icon = iconsPath .. "Socials-64x64", --false, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Socials-64x64-classic", --false, --microIconsRoot .. "Help"
 						--twoChars = "So"
 					}
 				}
@@ -91,7 +91,7 @@ A.SButton = {
 						["macrotext"] = "/run ToggleQuestLog()"
 					},
 					info = {
-						icon = iconsPath .. "Quest-64x64", --false, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Quest-64x64-classic", --false, --microIconsRoot .. "Help"
 						--twoChars = "Q"
 					}
 				}
@@ -108,7 +108,8 @@ A.SButton = {
 						["macrotext"] = "/run ToggleTalentFrame()"
 					},
 					info = {
-						icon = 132222, --false, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Tallents-64x64-classic",
+						--icon = 132222, --false, --microIconsRoot .. "Help"
 						--twoChars = "T"
 					}
 				}
@@ -125,7 +126,7 @@ A.SButton = {
 						["macrotext"] = "/run ToggleSpellBook(BOOKTYPE_SPELL)"
 					},
 					info = {
-						icon = iconsPath .. "Spellbook-64x64", --false, --microIconsRoot .. "Help"
+						icon = iconsPath .. "Spellbook-64x64-classic", --false, --microIconsRoot .. "Help"
 						--twoChars = "Sp"
 					}
 				}
@@ -145,6 +146,9 @@ A.SButton = {
 						icon = function(iconFrame)
 							--iconFrame:Show();
 							SetPortraitTexture(iconFrame, "player");
+							iconFrame.inconBorder:Show();
+							iconFrame.inconBorder:SetTexCoord(iconFrame:GetTexCoord());
+
 							if (iconFrame._portraitChangeListener) then return end;
 							iconFrame._portraitChangeListener = true;
 							A.Bus.On("UNIT_PORTRAIT_UPDATE", function(unitName,a2,a3) 

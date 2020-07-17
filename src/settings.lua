@@ -52,7 +52,7 @@ local function GrowAndSideEditFrame(parent, context)
 	edit.control = C.CreateDropdownControl(edit, function(self) makeGrowAndSideDropdown(self, parent, context) end);
 	return edit;
 end
-C.SetControlBuilder("growAndSide", GrowAndSideEditFrame);
+C:SetControlBuilder("growAndSide", GrowAndSideEditFrame);
 
 
 local function makeGrowDropdown(control, parent, context)
@@ -78,7 +78,20 @@ local function GrowEditFrame(parent, context)
 	edit.control = C.CreateDropdownControl(edit, function(self) makeGrowDropdown(self, parent, context) end);
 	return edit;
 end
-C.SetControlBuilder("grow", GrowEditFrame);
+C:SetControlBuilder("grow", GrowEditFrame);
+
+
+
+local barShowOns = {
+	["always"] = 0, 
+	["mouseover"] = 1, 
+	--["when alt pressed"] = 2, 
+	--["when shift pressed"] = 4, 
+	--["when control pressed"] = 8, 
+	["in combat"] = 16,
+	["not in combat"] = 32,
+	--["never"] = -1
+}
 
 
 
@@ -93,6 +106,15 @@ local contextShouldSkip = function(self, bar)
 end
 
 local barConfigControls = {
+	{
+		group = "main",
+		onlyRoot = true,
+		key = "showConditions",
+		label = "Bar show conditions",
+		control = "bitwisemask",
+		sourceValues = _.localizeKeys(barShowOns),
+		shouldSkip = contextShouldSkip,
+	},	
 	{
 		group = "main",
 		onlyRoot = true,
@@ -144,12 +166,29 @@ local barConfigControls = {
 		end
 	},
 	{
+		group = "main",	
+		onlyNested = true,	
+		key = "anchorOnCenter",
+		label = "Bar should be centered",
+		control = "boolean",
+		shouldSkip = contextShouldSkip,
+		--defaultValue = false,
+	},
+	{
+		group = "main",		
+		key = "classicButtonLook",
+		label = "Use classic buttons look",
+		control = "boolean",
+		shouldSkip = contextShouldSkip,
+		--defaultValue = false,
+	},	
+	{
 		group = "main",		
 		key = "buttonsInLine",
 		label = "Bar buttons count in line",
 		control = "number",
 		shouldSkip = contextShouldSkip,
-		defaultValue = 12,
+		--defaultValue = 12,
 	},
 	{
 		group = "main",		
@@ -157,7 +196,7 @@ local barConfigControls = {
 		label = "Bar buttons size",
 		control = "number",
 		shouldSkip = contextShouldSkip,
-		defaultValue = 36,
+		--defaultValue = 36,
 	},
 	{
 		group = "main",		
@@ -178,26 +217,36 @@ local barConfigControls = {
 		key = "background",
 		label = "Bar background color",
 		control = "color",
-		beforeValueSet = function(value) return value or {0,0,0,.8} end,
+		--beforeValueSet = function(value) return value or {0, 0, 0, 0} end,
 		shouldSkip = contextShouldSkip,
-	},		
+	},
+	{
+		group = "main",		
+		key = "disableCleanupOnDrag",
+		label = "Disable buttons cleanup",
+		control = "boolean",
+		shouldSkip = contextShouldSkip,
+	},	
 }
 
-C.RegisterSettings("BARSETTINGS", {
+C.RegisterSettings(A, "BARSETTINGS", {
 	-- tabs = {
 	-- 	{ group = "main", name = "This bar settings" },
 	-- 	{ group = "defs", name = "All bars defaults" },
 	-- },
 	controls = barConfigControls,
 	mixin = {
+		BeforeApplyValues = function(self, value)
+			return value;
+		end,
 		AfterApplyValues = function(self)
-			A.Bar.ToModel(self:GetEntity()):Rebuild();
+			A.Bar.ToModel(self:GetEntity()):Rebuild(true);
 		end
 	}
 });
 
 A.Settings.ShowBarSettings = function(bar, afterApply)
-	C.ShowSettings("BARSETTINGS", bar, afterApply);
+	C.ShowSettings(A, "BARSETTINGS", bar, afterApply);
 	-- local frame = getConfigFrame();
 	-- frame:InitForm(bar);
 	-- frame:Show();
@@ -250,7 +299,7 @@ local buttonSettings = {
 	},				
 }
 
-C.RegisterSettings("BUTTONSETTINGS", {
+C.RegisterSettings(A, "BUTTONSETTINGS", {
 	controls = buttonSettings,
 	mixin = {
 		AfterApplyValues = function(self)
@@ -279,14 +328,14 @@ local function makeButtonShowOn(control, parent, context)
 		end
 	end
 end
-C.SetControlBuilder("buttonShow", function(parent, context) 
+C:SetControlBuilder("buttonShow", function(parent, context) 
 	local edit = C.CreateEditFrame(parent, context);
 	edit.control = C.CreateDropdownControl(edit, function(self) makeButtonShowOn(self, parent, context) end);
 	return edit;
 end);
 
 A.Settings.ShowButtonSettings = function(button, afterApply)
-	C.ShowSettings("BUTTONSETTINGS", button, afterApply);
+	C.ShowSettings(A, "BUTTONSETTINGS", button, afterApply);
 end
 
 -- #region Confirmation dialogs
@@ -561,7 +610,7 @@ local function SubHeader(frame, previous)
 end
 
 A.Settings.CreateInfoFrame = function (chatCommands)
-	local frame = CreateFrame("Frame", nil, UIParent, "Tabu_DialogTemplate");
+	local frame = CreateFrame("Frame", nil, UIParent, "TabuBars_DialogTemplate");
 	local height = 0;
 	frame:SetFrameStrata("DIALOG");
 	frame:SetWidth(400);

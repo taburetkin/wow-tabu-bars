@@ -117,5 +117,46 @@
 		<HighlightTexture parentKey="highlightTexture" alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square"/>
 		<CheckedTexture parentKey="checkedTexture" alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight"/>
 	</Button>
-	<Frame name="TabuBars_ConfigControlTemplate" virtual="true" hidden="true" />	
+	<Frame name="TabuBars_ConfigControlTemplate" virtual="true" hidden="true" />
+	<Frame name="TabuBars_HiddenFrameTemplate" virtual="true" hidden="true" />
+	<Frame name="TabuBars_MovableFrameTemplate" virtual="true" hidden="true" movable="true" enableMouse="true">
+		<Scripts>
+			<OnLoad>
+				self:RegisterForDrag("LeftButton")
+			</OnLoad>
+			<OnDragStart>
+			if not self.isLocked then
+				self:StartMoving()
+			end
+			</OnDragStart>
+			<OnDragStop>
+				self:StopMovingOrSizing();
+				if self.AfterStopMovingOrSizing then
+					self:AfterStopMovingOrSizing();
+				end
+			</OnDragStop>			
+		</Scripts>
+	</Frame>
+	<Frame name="TabuBars_DialogTemplate" inherits="TabuBars_HiddenFrameTemplate, TabuBars_MovableFrameTemplate" virtual="true" >
+		<Frames>
+			<Button parentKey="closeButton">
+				<Size>
+					<AbsDimension x="32" y="32"/>
+				</Size>
+				<Anchors>
+					<Anchor point="CENTER" relativePoint="TOPRIGHT">
+						<Offset>
+							<AbsDimension x="-13" y="-13"/>
+						</Offset>
+					</Anchor>
+				</Anchors>
+				<Scripts>
+					<OnClick>self:GetParent():Hide();</OnClick>
+				</Scripts>
+				<NormalTexture file="Interface\Buttons\UI-Panel-MinimizeButton-Up"/>
+				<PushedTexture file="Interface\Buttons\UI-Panel-MinimizeButton-Down"/>
+				<HighlightTexture file="Interface\Buttons\UI-Panel-MinimizeButton-Highlight" alphaMode="ADD"/>
+			</Button>
+		</Frames>
+	</Frame>
 </Ui>

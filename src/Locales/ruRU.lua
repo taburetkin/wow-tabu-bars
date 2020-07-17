@@ -24,6 +24,7 @@ A:CreateLocale("ruRU", {
 	["|cffffff00/tabubars|r for info"] = "|cffffff00/tabubars|r показать информационную панель",
 	["|cffffff00/tabubars add|r to add action bar"] = "|cffffff00/tabubars add|r для создания новой панели комманд",
 	["|cffffff00/tabubars wipeall|r to clean all data and restart the UI"] = "|cffffff00/tabubars wipeall|r полностью стирает все панели и кнопки и перезагружает интерфейс",
+	["|cffffff00/tabubars show hidden|r shows all hidden bars for ten seconds"] = "|cffffff00/tabubars show hidden|r показывает на 10 секунд все скрытые панели",
 	["Chat commands:"] = "Чат комманды:",
 	["Create bar"] = "Создать панель",
 	["Management:"] = "Управление:",
@@ -52,4 +53,12 @@ A:CreateLocale("ruRU", {
 	["Count text size"] = "Размер шрифта индикатора \"Количество\"",
 	["HotKey text font"] = "Шрифт индикатора \"HotKey\"",
 	["HotKey text size"] = "Размер шрифта индикатора \"HotKey\"",
+	["Bar show conditions"] = "Условия отображения панели",
+	["always"] = "всегда",
+	["mouseover"] = "при наведении",
+	["in combat"] = "в бою",
+	["not in combat"] = "не в бою",
+	["Use classic buttons look"] = "Классический вид кнопок",
+	["Disable buttons cleanup"] = "Отключить очищение кнопки",
+	["Bar should be centered"] = "Выравнивать панель по центру"
 });

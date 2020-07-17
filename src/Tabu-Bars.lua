@@ -51,7 +51,8 @@ local function tabubarsSlashProcessor(type)
 			A.Bar.Enable(model.item);
 		end
 		ReloadUI();
-
+	elseif ((type == "show" and subtype == "hidden") or type=="showhidden") then
+		A.Bar.ShowAllHidden(10);
 	elseif (type == "list") then
 		A.Bar.Iterate(function(bar) 
 			_.print("Bar", bar.id, (bar.disabled and "disabled" or "enabled"));
@@ -62,17 +63,100 @@ local function tabubarsSlashProcessor(type)
 end
 
 local function initializeSlashCommands()
-	SLASH_TABUBARS1 = "/tabubars";
-	SLASH_TABUBARS2 = "/tabu-bars";
-	SLASH_TABUBARS3 = "/Tabu-Bars";
-	SLASH_TABUBARS4 = "/TabuBars";
-	SlashCmdList["TABUBARS"] = tabubarsSlashProcessor;
+	-- SLASH_TABUBARS1 = "/tabubars";
+	-- SLASH_TABUBARS2 = "/tabu-bars";
+	-- SLASH_TABUBARS3 = "/Tabu-Bars";
+	-- SLASH_TABUBARS4 = "/TabuBars";
+	-- SlashCmdList["TABUBARS"] = tabubarsSlashProcessor;
+	local proc = A.ChatCommands.Register("TABUBARS", "/tabubars", "/tabu-bars", "/Tabu-Bars", "/TabuBars");	
+
+	-- open main info
+	proc:AddCommand(A.ShowInfo, {""});
+	proc:AddCommand(A.ShowInfo, {"info"});
+
+	-- add new bar
+	proc:AddCommand(function(self, barid) 
+		A.Bar.NewBar();	
+	end, {"add"});
+
+	-- wipe ALL stored data
+	proc:AddCommand(function() 
+		wipe(Cache());
+		ReloadUI();
+	end, {"wipeall"});
+
+	-- wipe bar by id
+	proc:AddCommand(function(self, barid) 
+		local cache = Cache();
+		if (cache.bars[barid]) then
+			cache.bars[barid] = nil;
+		else
+			_.print("Wrong bar id", barid);
+		end		
+	end, {"wipe"});
+
+	-- Dump cache
+	proc:AddCommand(function() 
+		Tabu.dump(Cache());
+	end, {"dump"});	
+
+	-- Toggle debug mode
+	proc:AddCommand(A.debug, {"debug"});
+
+	-- Inspect stored bar or button by id
+	proc:AddCommand(function(self, id) 
+		local model = A.Models.GetById(id);
+		Tabu.dump(model and model.item);
+	end, {"inspect"});
+
+	-- Disable bar by id (or disable all by "all" keyword)
+	proc:AddCommand(function(self, subtype) 
+		if (not subtype) then 
+			_.print('specify what to disable, id or "all"');
+			return 
+		elseif (subtype == "all") then
+			A.Bar.Iterate(A.Bar.Disable)
+		else
+			local model = A.Models.GetById(subtype);
+			if (not model) then return end;
+			A.Bar.Disable(model.item);
+		end
+		ReloadUI();
+	end, {"disable"});
+
+	-- Enable bar by id (or enable all by "all" keyword)
+	proc:AddCommand(function(self, subtype) 
+		if (not subtype) then 
+			return 
+		elseif (subtype == "all") then
+			A.Bar.Iterate(A.Bar.Enable)
+		else
+			local model = A.Models.GetById(subtype);
+			if (not model) then return end;
+			A.Bar.Enable(model.item);
+		end
+		ReloadUI();
+	end, {"enable"});
+
+
+	-- Prints bar list with some data
+	proc:AddCommand(function(self) 
+		A.Bar.Iterate(function(bar) 
+			_.print("Bar", bar.id, (bar.disabled and "disabled" or "enabled"));
+		end)	
+	end, {"list"});
+
+	-- Shows all hidden bars for ten seconds for accessing their options
+	proc:AddCommand(A.Bar.ShowAllHidden, {"show", "hidden"});
+	proc:AddCommand(A.Bar.ShowAllHidden, {"showhidden"});
+
 end
 
 
 local chatCommands = {
 	"|cffffff00/tabubars|r for info",
 	"|cffffff00/tabubars add|r to add action bar",
+	"|cffffff00/tabubars show hidden|r shows all hidden bars for ten seconds",
 	"|cffffff00/tabubars wipeall|r to clean all data and restart the UI",
 }
 
@@ -141,19 +225,45 @@ local getDefaults = function (t)
 	end
 end
 
-A.GetDefaultValue = function(entityType, key, entity, fb1, fb2, fb3)
-	local defs = getDefaults(entityType);
-	if (entity[key] ~= nil) then
+-- entityType, key, entity, fb1, fb2, fb3
+A.GetDefaultValue = function(...)
+	local entityType, key, entity = select(1, ...);
+	--local values = { select(4, ...) };
+	--print('# getdef: ', ...);
+	
+	if (_.isValue(entity[key])) then
 		return entity[key]
-	elseif defs[key] ~= nil then
-		return defs[key];
-	elseif fb1 ~= nil then
-		return fb1
-	elseif fb2 ~= nil then
-		return fb2
-	else
-		return fb3
 	end
+
+	-- if (entityType == "bar") then
+	-- 	print(' take: ', key);
+	-- end
+
+	-- if (key == "buttonSize") then
+	-- 	print('# ==', select(4, ...));
+	-- end
+
+	for i=4, select('#', ...) do
+		local value = select(i, ...);
+		--print(' i:', i, value);
+		if (_.isValue(value)) then 
+			return value 
+		end;
+	end
+
+	local defs = getDefaults(entityType);	
+	if _.isValue(defs[key]) then
+		return defs[key];
+	end
+
+
+	-- elseif _.isValue(fb1) then
+	-- 	return fb1
+	-- elseif _.isValue(fb2) then
+	-- 	return fb2
+	-- else
+	-- 	return fb3
+	-- end
 end
 
 Tabu.test = function()

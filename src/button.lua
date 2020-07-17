@@ -1,7 +1,9 @@
 local A, _, L, Cache = Tabu:Spread(...);
 A.Button = {}
 
+local iconsPath = "Interface\\AddOns\\"..A.OriginalName.."\\Media\\Icons\\";
 local EMPTYSLOT = "Interface\\Buttons\\UI-Quickslot";
+
 
 
 local detectOffset = function (point, kind, value)
@@ -101,6 +103,193 @@ end
 
 
 local ButtonFrameMixin = {
+
+	GetTBModel = function (self)
+		return A.Button.ToModel(self.TBButtonId);
+	end,
+
+	SetReferences = function(frame, model)
+		-- setting needed references
+		-- common frame
+		frame:SetFrameRef("common", A.COMMONFRAME);
+		
+		local popupFrame = model:GetPopupFrame() or A.COMMONFRAME;
+		frame:SetFrameRef("popupFrame", popupFrame);
+		--frame:SetFrameRef("popupFrameSbg", popupFrame.sbg or A.COMMONFRAME);
+		
+		local parentFrame = model:GetParentBarFrame();
+		-- parent bar secure bg
+		frame:SetFrameRef("parentBarSbg", parentFrame.sbg);
+
+		local rootBarFrame = model:GetRootBarFrame();
+		frame:SetFrameRef('rootBarFrame', rootBarFrame);
+
+		local parentBarModel = model:GetParentBarModel();
+		local popupNames = parentBarModel:GetParentPopupNamesAsString();
+		frame:SetAttribute("parentPopupNames", popupNames);
+	end,
+
+	ShowContextMenu = function(btnFrame, clicked)
+		if (A.Locked("showContextMenu")) then return end;
+		if (not btnFrame.contextMenu) then
+			btnFrame.contextMenu = A.Settings.GetButtonMenuFrame();
+		end
+		local btnModel = A.Button.ToModel(btnFrame.TBButtonId);
+		local button = btnModel.item;
+		local bar = btnModel.parentBar;
+		UIDropDownMenu_Initialize(btnFrame.contextMenu, function(self,level)
+			A.Settings.PopulateButtonMenu(self, button, bar, level);
+		end, "MENU");
+		ToggleDropDownMenu(1, nil, btnFrame.contextMenu, "cursor", 3, -3);
+	end,
+
+	AcceptNewThing = function(btnFrame) 
+
+		if (A.Locked("acceptNewThing")) then return end;
+		local newbutton = A.GetDragItem();
+		ClearCursor();
+		if newbutton then
+			A.dragStop();
+			local btnModel = A.Button.ToModel(btnFrame.TBButtonId);
+			local item = btnModel:Pickup();
+			local barModel = A.Button.ToModel(btnFrame.TBBarId);
+
+			btnModel:Change(newbutton);
+			barModel:TryExpand(btnModel);
+
+			if (item) then
+				A.dragStart(item);
+			end
+		end		
+	end,
+
+	SwapWithParent = function(btnFrame) 
+		if (A.Locked("SwapWithParent click")) then return end;
+		local btnModel = A.Button.ToModel(btnFrame.TBButtonId);
+		btnModel:SwapWithParent(); 
+	end,
+
+	DragStartHandler = function(self, clickedbutton) 
+
+		local buttonModel = A.Button.ToModel(self.TBButtonId);
+		local button = buttonModel.item;
+
+		_.print('drag start', A.Locked("onDragStart"));
+		if (A.Locked("onDragStart")) then return end;
+
+		local shift_key = IsShiftKeyDown();
+		local noShift = not shift_key;
+		local alt_key = IsAltKeyDown();
+		local noSpecialKey = not (shift_key or alt_key);
+		local noSimpleSwap = noShift or not button.type;
+		local noButtonSwap = not alt_key;
+		if (
+			noSimpleSwap
+			or A.barsChangeDisabled()
+		) then return end;
+		
+		if (shift_key) then
+			
+			local item = buttonModel:Pickup();
+			buttonModel:Clean();
+			buttonModel:UpdateButtonFrame();
+			if item then
+				A.dragStart(item);
+			end
+		-- elseif (alt_key) then
+		-- 	A.draggingButton = button;
+		end
+	end,
+
+	SetupMouseBehavior = function(frame, model)
+		SecureHandlerWrapScript(frame, "OnEnter", frame, [=[
+			local cmn = self:GetFrameRef("common");
+
+			local rootBar = self:GetFrameRef('rootBarFrame');
+			rootBar:SetAlpha(1);
+
+			-- build parent popups hames hash
+			local parentPopupNames = self:GetAttribute("parentPopupNames") or "";
+			local ppn = newtable(strsplit(" ", parentPopupNames));
+			local parentPopups = newtable();
+			for i, parentPopupName in pairs(ppn) do
+				parentPopups[parentPopupName] = true;
+			end
+
+			-- build opened popups table and hide foreign(not parent) popups
+			local openedPopupNames = cmn:GetAttribute("openedPopups") or "";
+			if openedPopupNames ~= "" then
+				local opn = newtable(strsplit(" ", openedPopupNames));
+				for i, openedPopupName in pairs(opn) do
+					if not parentPopups[openedPopupName] then
+						local openedPopup = cmn:GetFrameRef("popup_"..openedPopupName);
+						openedPopup:Hide();
+					end
+				end
+			end
+			openedPopupNames = parentPopupNames or "";
+
+			-- show this button Popup
+			local popup = self:GetFrameRef("popupFrame");
+			if popup and popup ~= cmn then
+				local deleted = popup:GetAttribute("wasDeleted");
+				if (not deleted) then
+					popup:Show();
+
+					if (openedPopupNames ~= "") then
+						openedPopupNames = openedPopupNames .. " ";
+					end
+					openedPopupNames = openedPopupNames .. popup:GetName();
+					
+				end
+			end
+
+			-- update opened popup names cache
+			cmn:SetAttribute("openedPopups", openedPopupNames);
+
+			-- hide previous parentBarSbg and show new one
+			local sbg = self:GetFrameRef("parentBarSbg");
+			local scbgn = cmn:GetAttribute("currentSbgName");
+			cmn:SetAttribute("currentSbgName", sbg:GetName());
+			sbg:Show();
+
+			if scbgn then
+				local prevSbg = cmn:GetFrameRef("bar_sbg_"..scbgn);
+				if prevSbg and prevSbg ~= sbg then
+					prevSbg:Hide();
+				end
+			end
+
+			-- -- show parent bar sbg		
+			-- if (sbg) then 
+			-- 	cmn:SetAttribute("currentSbgName", sbg:GetName());
+			-- end;
+			
+			self:CallMethod("ShowButtonTooltip");
+		]=]);
+
+		SecureHandlerWrapScript(frame, "OnLeave", frame, [=[
+			self:CallMethod("HideButtonTooltip");
+		]=]);
+	
+		SecureHandlerWrapScript(frame, "OnClick", frame, [=[
+			local common = self:GetFrameRef("common");
+			local isDragging = common:GetAttribute("dragging");
+			if (isDragging) then
+				self:CallMethod("AcceptNewThing");
+				return false;
+			end
+		]=]);
+	end,
+
+	ShowButtonPopup = function(frame)
+		local model = frame:GetTBModel();
+		local popupFrame = model:GetPopupFrame();
+		if (popupFrame) then
+			popupFrame:Show();
+		end
+	end,
+
 	SetTwoChars = function(self, txt)
 		-- txt = txt or "";
 		-- self.twoChars:SetText(txt);
@@ -170,6 +359,7 @@ local ButtonFrameMixin = {
 		frame.HotKey:SetText(key);
 
 	end,
+
 	ShowButtonTooltip = function (self)
 		if (InCombatLockdown()) then return end;
 		if (self:GetAttribute("special")) then
@@ -214,6 +404,13 @@ local ButtonFrameMixin = {
 		end
 
 		GameTooltip:Show();
+	end,
+
+	SetNewRootBarReference = function(self)
+		local model = A.Bar.ToModel(self.TBBarId);
+		if (not model:IsRoot()) then return end;
+		local rootFrame = model:GetBarFrame();
+		A.COMMONFRAME:SetFrameRef("hoveredRootBar", rootFrame);
 	end,
 
 	HideButtonTooltip = function() 
@@ -322,47 +519,7 @@ local ButtonMixin = {
 		local button = self.item;
 		local attrs, icon;
 
-		-- if (self.item.useFirstAvailable and false) then
-		-- 	-- self.bestButton = self:GetPopupModel():GetFirstAvailableButton();
-		-- 	-- attrs, info = self.bestButton.attrs, self.bestButton.info;
-		-- 	-- icon = info and info.icon;
-		-- elseif (HUHUHUHUHUHUHUHU) then
-		-- 	local button = self.item;		
-		-- 	attrs = button.attrs or {}
-		-- 	local info = button.info or {};
-		-- 	icon = info.icon;
 
-		-- 	if (not attrs.entity_id) then
-		-- 		attrs.entity_id = info.id;
-		-- 	end
-
-		-- 	if (attrs.type1) then
-		-- 		attrs["*type1"] = attrs.type1;
-		-- 		attrs.type1 = nil;
-		-- 	end
-
-		-- 	attrs = _.cloneTable(attrs);
-
-		-- 	if (button.type == "macro") then
-		-- 		local check = _.GetMacroInfoTable(button.info.id);
-		-- 		if (check.name ~= button.info.name) then
-		-- 			local newid = GetMacroIndexByName(info.name);
-		-- 			_.print("MACRO MISMATCH. ", button.info.name, button.info.id, ", NOW:", check.name, "new id should be: ", newid);
-		-- 			button.attrs["*type1"] = "macro";
-		-- 			button.attrs["macro"] = button.info.name;
-		-- 			button.attrs.entity_id = newid;
-		-- 			button.info.id = newid;
-		-- 		end
-		-- 		attrs["checkselfcast"] = true;
-		-- 		attrs["checkfocuscast"] = true;
-		-- 	elseif (button.type == "spell") then
-		-- 		attrs["checkselfcast"] = true;
-		-- 		attrs["checkfocuscast"] = true;
-		-- 	end
-		-- end
-
-		--local attrs = 
-		--buildButtonFrameAttrs(button);
 		if (button.type == "item") then
 			if (type(button.info.id) ~= "number") then
 				C_Timer.After(2, function() 
@@ -375,21 +532,7 @@ local ButtonMixin = {
 				btn:SetupAction(button.attrs);
 				btn:SetupIcon(button);
 			end
-			-- local name = GetItemInfo(button.typeName);
-			-- local id = GetItemInfoInstant(button.typeName);
-			-- print("LOOKING FOR", button.typeName, name, id, button.info.id);
-			-- if (not button.info or type(button.info.id) ~= "number") then
-			-- 	A.Bus.OnItem(button.typeName, function(info) 
-			-- 		print("OPLYA!");
-			-- -- 		button.info = info;
-			-- -- 		btn:SetupAction(button.attrs);
-			-- -- 		btn:SetupIcon(button);
-			-- 	 end);
-			-- 	 GetItemInfo(button.typeName);
-			-- else
-			-- 	btn:SetupAction(button.attrs);
-			-- 	btn:SetupIcon(button);
-			-- end
+
 		else
 			btn:SetupAction(button.attrs);
 			btn:SetupIcon(button);
@@ -400,6 +543,19 @@ local ButtonMixin = {
 	IsVisible = function (self)
 		if (not self.isIndicator) then return true end;
 		return self:CheckShowCondition();
+	end,
+
+	IsVisibleNow = function (self)
+		local bf = self:GetButtonFrame();
+		if not bf:IsShown() then return false end;
+		local parentBarFrame = self:GetParentBarFrame();
+		if not parentBarFrame:IsShown() then return false end;
+		if parentBarFrame:GetAlpha() == 0 then return false end;
+		local rootBarFrame = self:GetRootBarFrame();
+		if rootBarFrame == parentBarFrame then return true end;
+		if not rootBarFrame:IsShown() then return false end;
+		if rootBarFrame:GetAlpha() == 0 then return false end;
+		return true;
 	end,
 
 	CheckShowCondition = function(self)
@@ -460,19 +616,6 @@ local ButtonMixin = {
 			updateSpecialButtonFrame(button, frame);
 		end
 	end,
-
-	-- GetUpdateContext = function(self, index)
-	-- 	local parentModel = self:GetParentBarModel();
-	-- 	local parentBar = parentModel.item;
-	-- 	local buttons = parentBar.buttons;
-	-- 	index = index or self.item.index or parentBar.buttonsCount or 0;
-	-- 	local lineSize = self.parentBar.buttonsInLine;
-	-- 	local lineNumber = math.modf(index / parentBar.buttonsInLine);
-	-- 	local lineIndex = math.fmod(index, parentBar.buttonsInLine);
-	-- 	local prevButton = index > 0 and buttons[index + 1];
-	-- 	local prevLineFirstButton = index >= lineSize and buttons[(lineNumber * lineSize) + 1] or nil;
-	-- 	return index, lineSize, lineNumber, lineIndex, prevButton, prevLineFirstButton;
-	-- end,
 
 	UpdateButtonPosition = function (self)
 
@@ -539,15 +682,32 @@ local ButtonMixin = {
 	
 			
 		end
-		local buttonSize = barModel:GetOption('buttonSize', 36);
-		frame:SetSize(buttonSize, buttonSize);
-		frame:ClearAllPoints();
 
+		local buttonSize = barModel:GetOption('buttonSize', 36);		
+		frame:SetSize(buttonSize, buttonSize);
+
+		frame:ClearAllPoints();
 		frame:SetPoint(point, parent, relativePoint, offsetX, offsetY);
 	
 	end,
+
+	SetRefreshListeners = function(model)
+		local frame = model:GetButtonFrame();
+		for event, x in pairs(model.refreshOn) do
+			frame:RegisterEvent(event);
+		end
+	end,
+
+	UnsetRefreshListeners = function(model)
+		local frame = model:GetButtonFrame();
+		for event, x in pairs(model.refreshOn) do
+			frame:UnregisterEvent(event);
+		end
+	end,
+
 	SetupRefreshListeners = function(model)
 		local frame = model:GetButtonFrame();
+
 		model.refreshOn = {
 			-- ["BAG_UPDATE"] = 2,
 			-- ["BAG_UPDATE_COOLDOWN"] = 2,
@@ -560,13 +720,7 @@ local ButtonMixin = {
 			-- ["PLAYER_DEAD"] = 3,
 			-- ["PLAYER_LEVEL_UP"] = 3,
 		}
-		for event, x in pairs(model.refreshOn) do
-			frame:RegisterEvent(event);
-		end
-		-- for event, x in pairs(model.spellRefreshOn) do
-		-- 	frame:RegisterEvent(event);
-		-- end
-		
+
 		frame:SetScript("OnEvent", function(self, event, arg) 
 			if (model.deleted or model.hidden) then
 				return;
@@ -587,10 +741,12 @@ local ButtonMixin = {
 				if (checkArg) then
 					if (not checkArg(arg)) then return end
 				end
+				if not model:IsVisibleNow() then return end;
 				model:UpdateButtonFrame();
 			end
 		end)
 	end,
+
 	InitializeButton = function(self)
 		if (self.builded) then return end;
 		local btn = self.item;
@@ -599,6 +755,53 @@ local ButtonMixin = {
 			_.mixin(btn, mixData);
 		end
 	end,
+
+	CreateButtonFrame = function(self)
+		local parent = self:GetParentBarFrame();
+		local button = self.item;
+		local bar = self.parentBar;
+		local barModel = A.Bar.ToModel(bar);
+
+		local frame = CreateFrame("Button", _.buildFrameName(button.id), parent, "ActionButtonTemplate, SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate");
+		self:SetButtonFrame(frame);
+		local iconBorder = frame:CreateTexture("$parentIconBorder", "BACKGROUND", nil, 2);
+		iconBorder:SetAllPoints();
+		iconBorder:SetTexture(iconsPath .. "Border-64x64-classic");
+		iconBorder:Hide();
+		frame.icon.inconBorder = iconBorder;
+
+		if (barModel.item.isNested) then
+			frame.isNested = true;
+			frame:SetAttribute("isNested", true);
+		end
+		frame.TBButtonId = button.id;
+		frame.TBBarId = bar.id;
+
+		if (button.hidden) then
+			frame:Hide();
+		end
+
+		-- local size = barModel:GetOption('buttonSize', 36);		
+		-- frame:SetSize(size, size);
+
+		--local ntsize = size * 1.83333; --1.78378378;
+		frame.NormalTexture:SetSize(.1, .1);
+		frame.bgOverlay = _.createColorTexture(frame, .5, 0, 0, 0, "BORDER");
+
+		_.mixin(frame, ButtonFrameMixin);
+
+		frame:RegisterForClicks("AnyUp");
+		frame:RegisterForDrag("LeftButton");
+		frame:SetAttribute("type2", "ShowContextMenu");
+		if (frame.isNested) then
+			frame:SetAttribute("shift-type2", "SwapWithParent");
+		end
+
+		frame:SetScript("OnDragStart", frame.DragStartHandler);
+
+		return frame;
+	end,
+
 	InitializeButtonFrame = function(self, context)
 
 		if (self.builded) then return end;
@@ -607,150 +810,66 @@ local ButtonMixin = {
 		local barModel = A.Bar.ToModel(bar);
 		local buttonModel = self;
 		local button = self.item;
-		local size = barModel:GetOption('buttonSize', 36);
+		--local size = barModel:GetOption('buttonSize', 36);
 			--bar.buttonSize;
 
 		local parent = self:GetParentBarFrame();
-		local frame = CreateFrame("Button", _.buildFrameName(button.id), parent, "ActionButtonTemplate, SecureActionButtonTemplate, SecureHandlerEnterLeaveTemplate");
-		self:SetButtonFrame(frame);
-
-		if (barModel.item.isNested) then
-			frame.isNested = true;
-		end
-
-		frame.TBButtonId = button.id;
-		frame.TBBarId = bar.id;
-
-		-- if (buttonModel.item.type == "special-button") then
-		-- 	frame.special = true;
-		-- end
-		if (button.hidden) then
-			frame:Hide();
-		end
-		frame:SetSize(size, size);
-		local ntsize = size * 1.83333; --1.78378378;
-		frame.NormalTexture:SetSize(.1, .1);
-		--frame.FlyoutBorder:Show();
-		frame.icon:SetTexCoord(.08, .92, .08, .92);
-		local pt = frame:GetPushedTexture();
-		pt:SetTexCoord(.08, .92, .08, .92);
-
-		local hlt = frame:GetHighlightTexture();
-		hlt:ClearAllPoints();
-		hlt:SetPoint("TOPLEFT", 0, 0);
-		hlt:SetPoint("BOTTOMRIGHT", 0, 0);
-		hlt:SetAllPoints();
-
-		--hlt:SetSize(size, size);
-
-		hlt:SetTexCoord(.08, .92, .08, .92);
-
-		_.setFrameBorder(frame, 0, 0, 0, .8);
-		local bg = _.createColorTexture(frame, 0, 0, 0, .1, "BACKGROUND");
-		bg:SetDrawLayer("BACKGROUND", -1);
-		--print("#", frame.icon:GetFrameLevel(), bg:GetFrameLevel());
-
-		frame.bgOverlay = _.createColorTexture(frame, .5, 0, 0, 0, "BORDER");
-
-		frame:SetFrameLevel(parent:GetFrameLevel()+1);
-		frame:RegisterForClicks("AnyUp");
-		frame:RegisterForDrag("LeftButton");
-		frame:SetFrameRef("common", A.COMMONFRAME);
-		frame:SetFrameRef("barsbg", parent.sbg);
-		frame:SetAttribute("type2", "showContextMenu");
-
+		local frame = self:CreateButtonFrame();
 		
-		_.mixin(frame, ButtonFrameMixin);
-		if (frame.isNested) then
-			frame:SetAttribute("shift-type2", "swapWithParent");
-			frame.swapWithParent = function() 
-				if (A.Locked("SwapWithParent click")) then return end;
-				buttonModel:SwapWithParent(); 
-			end
-		end
+		--frame:SetReferences(self);
+		frame:SetupMouseBehavior(self);
 		
-		frame.acceptNewThing = function() 
-
-			if (A.Locked("acceptNewThing")) then return end;
-			local newbutton = A.GetDragItem();
-			ClearCursor();
-			--A.ClearCursor();
-
-			if newbutton then
-				A.dragStop();
-				local item = buttonModel:Pickup();
-				buttonModel:Change(newbutton);
-				barModel:TryExpand(buttonModel);
-				if (item) then
-					A.dragStart(item);
-				end
-			end		
-		end;
-	
-		frame.showContextMenu = function(self, clicked)
-			if (A.Locked("showContextMenu")) then return end;
-			if (not self.contextMenu) then
-				self.contextMenu = A.Settings.GetButtonMenuFrame();
-			end
-			UIDropDownMenu_Initialize(self.contextMenu, function(self,level)
-				A.Settings.PopulateButtonMenu(self, button, bar, level);
-			end, "MENU");
-			ToggleDropDownMenu(1, nil, self.contextMenu, "cursor", 3, -3);
-		end
-	
-		SecureHandlerWrapScript(frame, "OnEnter", frame, [=[
-			local sbg = self:GetFrameRef("barsbg");
-			if (not sbg) then return end;
-			sbg:Show();
-			self:CallMethod("ShowButtonTooltip");
-		]=]);
-
-		SecureHandlerWrapScript(frame, "OnLeave", frame, [=[
-			self:CallMethod("HideButtonTooltip");
-		]=]);
-	
-		SecureHandlerWrapScript(frame, "OnClick", frame, [=[
-			local common = self:GetFrameRef("common");
-			local isDragging = common:GetAttribute("dragging");
-			if (isDragging) then
-				self:CallMethod("acceptNewThing");
-				return false;
-			end
-		]=]);
-	
-		frame:SetScript("OnDragStart", function(self, clickedbutton) 
-			if (A.Locked("onDragStart")) then return end;
-			local shift_key = IsShiftKeyDown();
-			local noShift = not shift_key;
-			local alt_key = IsAltKeyDown();
-			local noSpecialKey = not (shift_key or alt_key);
-			local noSimpleSwap = noShift or not button.type;
-			local noButtonSwap = not alt_key;
-			if (
-				noSimpleSwap
-				or A.barsChangeDisabled()
-			) then return end;
 			
-			if (shift_key) then
-				
-				local item = buttonModel:Pickup();
-				buttonModel:Clean();
-				buttonModel:UpdateButtonFrame();
-				if item then
-					A.dragStart(item);
-				end
-			-- elseif (alt_key) then
-			-- 	A.draggingButton = button;
-			end
-		end);
-	
 		self:SetupRefreshListeners();
+		self:SetRefreshListeners();
 
 		if (not button.hidden) then
 			frame:Show();
 		end	
+
+		self:SetupButtonFrameTheme();
+
+		return true;
 	end,
 
+	SetupButtonFrameTheme = function(self)
+		local frame = self:GetButtonFrame();
+		local cls = self:GetParentOption("classicButtonLook", false);
+		if (cls) then
+			local texcoords = {0, 0, 0, 1, 1, 0, 1, 1};
+			frame.icon:SetTexCoord(unpack(texcoords));
+			local pt = frame:GetPushedTexture();
+			pt:SetTexCoord(unpack(texcoords));
+			local hlt = frame:GetHighlightTexture();
+			hlt:SetTexCoord(unpack(texcoords));
+		else
+			local texcoords = self:GetParentOption("buttonIconTexCoord", {.08, .92, .08, .92});
+			frame.icon:SetTexCoord(unpack(texcoords));
+			local pt = frame:GetPushedTexture();
+			pt:SetTexCoord(unpack(texcoords));
+
+			local hlt = frame:GetHighlightTexture();
+			hlt:ClearAllPoints();
+			hlt:SetPoint("TOPLEFT", 0, 0);
+			hlt:SetPoint("BOTTOMRIGHT", 0, 0);
+			hlt:SetAllPoints();
+
+			--hlt:SetSize(size, size);
+
+			hlt:SetTexCoord(unpack(texcoords));
+			--_.setFrameBorder(frame, 0, 0, 0, .8);
+			
+			-- local bg = _.createColorTexture(frame, 0, 0, 0, .1, "BACKGROUND");
+			-- bg:SetDrawLayer("BACKGROUND", -1);
+
+		end	
+
+	end,
+
+	SetButtonFrameReferences = function(self)
+		local frame = self:GetButtonFrame();
+		frame:SetReferences(self);
+	end,
 	--endregion
 
 	--#region Relations
@@ -767,20 +886,30 @@ local ButtonMixin = {
 		local model = self:GetParentBarModel();
 		return model and model:GetBarFrame();
 	end,
+
 	GetPopupModel = function(self)
 		if (not self.item.bar) then return end;
 		local model = A.Bar.ToModel(self.item.bar);
 		return model;
 	end,
+
 	GetPopupFrame = function(self)
 		local model = self:GetPopupModel();
 		return model and model:GetBarFrame();
 	end,
+
 	GetParentButtonModel = function(self)
 		local barModel = self:GetParentBarModel();
 		return barModel:GetParentButtonModel();
 	end,
+
+	GetRootBarFrame = function(self)
+		local parent = self:GetParentBarModel();
+		return parent:GetRootBarFrame();
+	end,
+
 	--#endregion
+
 	IsEmpty = function(self)
 		return self.item.type == nil or self.item.type == "";
 	end,
@@ -804,14 +933,19 @@ local ButtonMixin = {
 			frame:Hide();
 		end
 	end,
+
 	--#region Popup
 	SetupButtonPopupBehavior  = function (self)
+
+		if 1 == 1 then return end
+
 		if (InCombatLockdown()) then return end;
 		local buttonFrame = self:GetButtonFrame();
 		local popupFrame = self:GetPopupFrame();
 
 		if (popupFrame) then
 			buttonFrame:SetFrameRef("popupFrame", popupFrame);
+			buttonFrame:SetFrameRef("popupsbg", popupFrame.sbg);
 			buttonFrame:SetAttribute("popupFrameDeleted", false);
 		end
 
@@ -894,8 +1028,11 @@ local ButtonMixin = {
 		self:UpdateButtonFrame();		
 	end,
 
-	Clean = function(self)
+	Clean = function(self, force)
 		local button = self.item;
+		if (not self:IsCleanAllowed(force)) then
+			return;
+		end
 		button.type = nil;
 		button.typeName = nil;
 		button.attrs = { ["*type1"] = "", special = false };
@@ -905,6 +1042,11 @@ local ButtonMixin = {
 		self:SetupButtonFrame();
 		self:UpdateButtonFrame();	
 	end,
+	IsCleanAllowed = function(self, force)
+		if (force == true) then return true end
+		return self:GetParentOption("disableCleanupOnDrag") ~= true;
+	end,
+
 
 	SwapWithParent = function(self)	
 
@@ -924,7 +1066,13 @@ local ButtonMixin = {
 		parent:SetupButtonFrame();
 		parent:UpdateButtonFrame();	
 
+	end,
+
+	GetParentOption = function(self, key, ...)
+		local model = self:GetParentBarModel();
+		return model:GetOption(key, ...);
 	end
+
 }
 
 A.Button.EmptyButtonAttributes = function()
@@ -1013,7 +1161,9 @@ A.Button.Build = function (button, index)
 	local bar = barModel.item;
 
 	model:InitializeButton();
-	model:InitializeButtonFrame();
+	if not model:InitializeButtonFrame() then
+		model:SetupButtonFrameTheme();
+	end
 	local firstInLine = false;
 
 	if (index ~= nil) then
@@ -1028,8 +1178,11 @@ A.Button.Build = function (button, index)
 	end
 
 	model:SetupButtonFrame();
-	model:UpdateButtonFrame();
+	if model:IsVisibleNow() then 		
+		model:UpdateButtonFrame();
+	end
 	model:SetupButtonPopupBehavior();
+	model:SetButtonFrameReferences();
 
 	model.builded = true;
 
