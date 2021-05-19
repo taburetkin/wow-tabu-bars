@@ -125,3 +125,19 @@ A.ClearCursor = function()
 end
 
 
+local BackdropTemplateString = nil;
+
+if A.BUILD.version > 20000 then
+	BackdropTemplateString = "BackdropTemplate";
+end
+
+A.fixedBackdropTemplate = function(text) 
+	if BackdropTemplateString ~= nil then
+		if text ~= nil then
+			return text .. ", " .. BackdropTemplateString;
+		else
+			return BackdropTemplateString
+		end
+	end
+	return text;
+end

@@ -21,23 +21,26 @@ end
 local BarFrameMixins = {
 	CreateSecureBg = function (self, barid)
 		local frame = self;
-		local sbg = CreateFrame("Frame", _.buildFrameName(barid.."SECBG"), frame, "SecureHandlerEnterLeaveTemplate, SecureHandlerShowHideTemplate");
+		local sbg = CreateFrame("Frame", _.buildFrameName(barid.."SECBG"), frame, A.fixedBackdropTemplate("SecureHandlerEnterLeaveTemplate, SecureHandlerShowHideTemplate"));
 		local size = 100;
 		local frameLevel = self:GetFrameLevel() - 1;
 		sbg:SetFrameLevel(frameLevel);
 		--_.print('#', sbg:GetName(), frameLevel);
 		frame.sbg = sbg;
 
-		frame:SetFrameRef("sbg", sbg);
+		--frame:SetFrameRef("sbg", sbg);
+		SecureHandlerSetFrameRef(frame, "sbg", sbg);
 
 		sbg:SetPoint("TOPLEFT", frame, "TOPLEFT", -size, size);
 		sbg:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", size, -size);
 		--_.createColorTexture(sbg, 1,1,0,0.2);
 		sbg:Hide();
 
-		sbg:SetFrameRef("common", A.COMMONFRAME);
+		SecureHandlerSetFrameRef(sbg, "common", A.COMMONFRAME);
+		--sbg:SetFrameRef("common", A.COMMONFRAME);
 	
-		A.COMMONFRAME:SetFrameRef("bar_sbg_"..sbg:GetName(), sbg);
+		--A.COMMONFRAME:SetFrameRef("bar_sbg_"..sbg:GetName(), sbg);
+		SecureHandlerSetFrameRef(A.COMMONFRAME, "bar_sbg_"..sbg:GetName(), sbg);
 
 		sbg.hidePopups = function()
 			A.Popup.HideAll();
@@ -80,7 +83,9 @@ local BarFrameMixins = {
 		]=]);
 
 		if (model:IsRoot()) then
-			sbg:SetFrameRef("barframe", frame);
+			--sbg:SetFrameRef("barframe", frame);
+			SecureHandlerSetFrameRef(sbg, "barframe", frame);
+			
 			sbg:SetAttribute("_onhide", [=[
 				local reason = self:GetAttribute("hide_reason") or "";
 				self:SetAttribute("hide_reason", "");
@@ -100,7 +105,9 @@ local BarFrameMixins = {
 			-- end);
 		else
 			local rootBarFrame = model:GetRootBarFrame();
-			sbg:SetFrameRef("rootBarFrame", rootBarFrame);
+			--sbg:SetFrameRef("rootBarFrame", rootBarFrame);
+			SecureHandlerSetFrameRef(sbg, "rootBarFrame", rootBarFrame);
+			
 			sbg:SetAttribute("_onhide", [=[
 				local reason = self:GetAttribute("hide_reason") or "";
 
@@ -386,6 +393,7 @@ local BarMixin = {
 	SetupChildButton = function(self, model, onOptionsChange)
 		local parent = self:GetBarFrame();
 		local frame = model:GetButtonFrame();
+		if not frame then return end
 		frame:SetFrameRef('parentBar', parent);
 		if (self:IsRoot()) then
 			frame:SetFrameRef('rootBar', parent);
@@ -672,7 +680,7 @@ local BarMixin = {
 		local newbtns = {};
 		self.lastButton = nil;
 		self.lastLineFirstButton = nil;
-		for _, button in pairs(btns) do
+		for _indx, button in pairs(btns) do
 			realIndex = realIndex + 1;
 			button.index = realIndex;
 			local valid, btnModel, firstInLine = A.Button.Build(button, index);
@@ -951,7 +959,7 @@ A.Bar.BuildAll = function()
 	local dictionary = Cache().bars;
 
 	for name, bar in pairs(dictionary) do	
-		bar = A.Bar.Build(bar, nil, index);
+		bar = A.Bar.Build(bar, index);
 		index = index + 1;	
 	end
 	A.Bar.UpdateButtonsRefs();

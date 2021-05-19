@@ -1,0 +1,8 @@
+local A, _, L = Tabu:Spread(...);
+local buildedAt = "<%= buildTime %>";
+A.BUILD = {
+    realm = "<%= realm %>",
+    version = <%= version %>,
+    maxVersion = <%= maxVersion %>,
+    nightly = <%= nightly %>
+}

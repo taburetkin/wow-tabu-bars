@@ -610,7 +610,7 @@ local function SubHeader(frame, previous)
 end
 
 A.Settings.CreateInfoFrame = function (chatCommands)
-	local frame = CreateFrame("Frame", nil, UIParent, "TabuBars_DialogTemplate");
+	local frame = CreateFrame("Frame", nil, UIParent, A.fixedBackdropTemplate("TabuBars_DialogTemplate"));
 	local height = 0;
 	frame:SetFrameStrata("DIALOG");
 	frame:SetWidth(400);

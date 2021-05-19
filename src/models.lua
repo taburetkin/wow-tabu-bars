@@ -1,11 +1,17 @@
 local A, _, L = Tabu:Spread(...);
 local models = {};
 A.Models = {};
+
+-- Initializing of model should be with table having filled id property.
+-- { id = "something" } - ok
 A.Models.ToModel = function(id, Mixin, debug)
 	local item;
 	if type(id) == "table" then
 		item = id;
 		id = item.id;
+	end
+	if not id then
+		error("ToModel does not receive id. "..(debug or ""));
 	end
 	local model = models[id];
 	if (not model) then

@@ -150,6 +150,12 @@ local function initializeSlashCommands()
 	proc:AddCommand(A.Bar.ShowAllHidden, {"show", "hidden"});
 	proc:AddCommand(A.Bar.ShowAllHidden, {"showhidden"});
 
+	proc:AddCommand(function() 
+		local frame = Tabu.ControlFrame.CreateTwoSidedOptionsFrame("TabuTestFrame");
+		frame:SetSize(800, 500);
+		frame:SetPoint("CENTER");
+	end, {"o"});
+
 end
 
 
@@ -204,6 +210,10 @@ local function initialize()
 	initializeCache();
 	-- C_Timer.After(5, function() 
 	-- end)
+
+	-- A.IndiBar.BuildAll();
+	-- A.IndiBar.SetupRefreshListeners();
+
 	A.Bar.BuildAll();
 	A.Bar.RefreshButtonsOn(refreshButtonEvents);
 

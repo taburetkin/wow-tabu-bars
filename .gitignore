@@ -1,4 +1,5 @@
 gulp/config.js
+_gulp
 publish/Tabu-Bars
 node_modules
 yarn.lock

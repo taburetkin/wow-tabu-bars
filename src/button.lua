@@ -44,12 +44,25 @@ local function updateMacroButtonFrame(button, frame)
 	if (not button.info.id) then
 		return;
 	end	
+	local slotIndex = button.info.id;
+	local macroName = button.info.name;
+
+	if slotIndex and type(slotIndex) == "string" then
+		macroName = slotIndex;
+		slotIndex = GetMacroIndexByName(slotIndex);
+	end
+
+	if slotIndex == nil or type(slotIndex) ~= "number" then
+		return;		
+	end
+
 	local count;
-	local thingId = GetMacroSpell(button.info.id);
+	local thingId = GetMacroSpell(slotIndex);
+
 	local thingType = "Spell";
 	local costType;
 	if (not thingId) then
-		local iname = GetMacroItem(button.info.id);
+		local iname = GetMacroItem(slotIndex);
 		if (iname) then
 			thingId = GetItemInfoInstant(iname);
 		end
@@ -70,9 +83,11 @@ local function updateMacroButtonFrame(button, frame)
 
 	frame:SetAmount(count, costType);
 	frame:ToggleCooldown(thingId, thingType, "Macro");
-	local command = "MACRO "..button.info.name;
-	key = GetBindingKey(command);
-	frame:SetButtonHotKey(key);
+	if macroName then
+		local command = "MACRO "..macroName;
+		key = GetBindingKey(command);
+		frame:SetButtonHotKey(key);
+	end
 	frame:SetTwoChars("");
 end
 
@@ -361,7 +376,7 @@ local ButtonFrameMixin = {
 	end,
 
 	ShowButtonTooltip = function (self)
-		if (InCombatLockdown()) then return end;
+		if (InCombatLockdown() or not IsShiftKeyDown()) then return end;
 		if (self:GetAttribute("special")) then
 			return;
 		end
@@ -472,6 +487,38 @@ local function buildButtonFrameAttrs(btn)
 	return res;
 end
 
+
+local function NormalizeMacros(item)
+
+	local newone = A.Button.BuildAttributes("macro", item.typeName);
+
+	if newone.typeName == nil or newone.typeName == "" then 
+		return "clean";
+	elseif (newone.typeName == item.typeName) then
+		item.info.id = newone.info.id;
+		item.info.name = newone.info.name;
+	end
+
+	-- local idType = type(item.info.id);
+	-- local macroName, macroIndex, pass, isLocal;
+	-- if item.info.id and idType == "number" then
+	-- 	macroIndex = item.info.id;
+	-- 	macroName, pass, pass, isLocal = GetMacroInfo(macroIndex);
+	-- elseif item.info.id and idType == "string" then
+	-- 	macroName = item.info.id;
+	-- 	macroIndex = GetMacroIndexByName(item.info.id);
+	-- end
+
+	-- local res = {
+	-- 	id = macroIndex,
+	-- 	name = macroName,
+	-- }
+
+	-- if res.id == 0 then
+	-- 	return "notfound";
+	-- end
+
+end
 
 local ButtonMixin = {
 
@@ -747,6 +794,16 @@ local ButtonMixin = {
 		end)
 	end,
 
+	NormalizeButtonItem = function(model)
+		if model:IsEmpty() then return end;
+		if model:IsMacros() then
+			local result = NormalizeMacros(model.item);
+			if result == "clean" then
+				model:Clean();
+			end
+		end
+	end,
+
 	InitializeButton = function(self)
 		if (self.builded) then return end;
 		local btn = self.item;
@@ -909,7 +966,9 @@ local ButtonMixin = {
 	end,
 
 	--#endregion
-
+	IsMacros = function(self)
+		return self.item.type == "macro";
+	end,
 	IsEmpty = function(self)
 		return self.item.type == nil or self.item.type == "";
 	end,
@@ -1159,16 +1218,19 @@ A.Button.Build = function (button, index)
 	local barModel = model:GetParentBarModel();
 	local buttonsInLine = barModel:GetOption('buttonsInLine', 12);
 	local bar = barModel.item;
-
-	model:InitializeButton();
-	if not model:InitializeButtonFrame() then
-		model:SetupButtonFrameTheme();
-	end
 	local firstInLine = false;
 
 	if (index ~= nil) then
 		firstInLine = math.fmod(index, buttonsInLine) == 0;
 		model.index = index;
+	end
+
+	model:NormalizeButtonItem();
+	--return true, model, firstInLine;
+
+	model:InitializeButton();
+	if not model:InitializeButtonFrame() then
+		model:SetupButtonFrameTheme();
 	end
 
 	model:UpdateButtonPosition();

@@ -1,14 +1,16 @@
 {
   "name": "tabu-bars",
   "addonName": "Tabu-Bars",
-  "version": "1.2.0",
-  "description": "wow classic action bars addon",
+  "version": "1.2.1",
+  "description": "wow tbc classic action bars addon",
   "author": "dimtabu",
   "license": "MIT",
   "devDependencies": {
     "del": "^5.1.0",
     "gulp": "^4.0.2",
+    "gulp-clean": "^0.4.0",
     "gulp-modify-file": "^1.0.1",
+    "gulp-rename": "^2.0.0",
     "underscore": "^1.10.2"
   },
   "scripts": {
