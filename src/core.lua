@@ -45,6 +45,7 @@ A.isDragging = function()
 end
 
 local DRAGINFOFRAME;
+
 local function getDraggingInfoFrame(btn)
 	local fr;
 	if (not DRAGINFOFRAME) then
@@ -81,20 +82,31 @@ local function getDraggingInfoFrame(btn)
 
 	return DRAGINFOFRAME;
 end
+
 A.GetDragItem = function()
 	local thingType, id = GetCursorInfo();
+
+	--print('## -- ', thingType, id);
+
 	if (A.pickedUpButton and not thingType) then
 		thingType = A.pickedUpButton.type;
 		id = A.pickedUpButton.typeName;
 	end
+
 	return A.Button.BuildAttributes(thingType, id, 'GetDragItem');	
 end
 
 A.dragStart = function(btn, native)
 	if (not btn) then
-		A.nativeDragging = true;
 		local thingType, id = GetCursorInfo();
+		-- local __, __spid = GetSpellBookItemInfo(id, BOOKTYPE_SPELL);
+		-- print('--- without button ', GetSpellInfo(__spid));
+		
 		btn = A.Button.BuildAttributes(thingType, id, 'dragStart without button');
+		if not btn then
+			return;
+		end
+		A.nativeDragging = true;
 	end
 	A.nativeDragging = btn.type == "spell" or btn.type == "macro" or btn.type == "item";
 	A.pickedUpButton = btn;

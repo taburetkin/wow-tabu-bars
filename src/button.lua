@@ -1,6 +1,8 @@
 local A, _, L, Cache = Tabu:Spread(...);
 A.Button = {}
 
+local SHM = A.Lib.SharedMedia;
+
 local iconsPath = "Interface\\AddOns\\"..A.OriginalName.."\\Media\\Icons\\";
 local EMPTYSLOT = "Interface\\Buttons\\UI-Quickslot";
 
@@ -164,7 +166,9 @@ local ButtonFrameMixin = {
 		local newbutton = A.GetDragItem();
 		ClearCursor();
 		if newbutton then
+
 			A.dragStop();
+
 			local btnModel = A.Button.ToModel(btnFrame.TBButtonId);
 			local item = btnModel:Pickup();
 			local barModel = A.Button.ToModel(btnFrame.TBBarId);
@@ -175,6 +179,7 @@ local ButtonFrameMixin = {
 			if (item) then
 				A.dragStart(item);
 			end
+
 		end		
 	end,
 
@@ -376,34 +381,68 @@ local ButtonFrameMixin = {
 	end,
 
 	ShowButtonTooltip = function (self)
-		if (InCombatLockdown() or not IsShiftKeyDown()) then return end;
+
+		local showShort, showFull;
+
+		if InCombatLockdown() then
+			showShort = IsShiftKeyDown();
+			showFull = false;
+		else
+			showShort = true;
+			showFull = IsShiftKeyDown();
+		end
+
+
+		if (not showShort and not showFull) then return end;
+
 		if (self:GetAttribute("special")) then
 			return;
 		end
 		--if (self.special) then return end;
 
 		local atype = self:GetAttribute("*type1");
+
 		if (not atype or atype == "") then
 			return;
 		end
+
 		GameTooltip:SetOwner(self);
+
 		local id = self:GetAttribute("entity_id");
 		local link;
 		if (atype == "spell") then
-			local name = self:GetAttribute("spell");
-			link = _.GetSpellLink(id);
-			GameTooltip:SetHyperlink(link);
+
+			if showFull then
+				local name = self:GetAttribute("spell");
+				link = _.GetSpellLink(id, name);
+				GameTooltip:SetHyperlink(link);
+			end
+
+			if showShort then
+				GameTooltip:AddLine(self:GetAttribute("spell"));
+			end
+
+			if showFull or showShort then
+				GameTooltip:AddLine("|cff4080ffID: |cffffffff"..id.."|r");
+			end
+
 		elseif (atype == "item") then
-			link = select(2, GetItemInfo(id));
-			GameTooltip:SetHyperlink(link);
+			if showFull then
+				link = select(2, GetItemInfo(id));
+				GameTooltip:SetHyperlink(link);
+			else
+				return;
+			end
 		elseif (atype == "macro") then
 			local macroName = self:GetAttribute("macro");
 			local body = GetMacroBody(macroName);
 			local lines = { strsplit("\n", body) }
 			GameTooltip:AddLine("macro: " .. macroName);
-			GameTooltip:AddLine("------------");
-			for _,line in pairs(lines) do
-				GameTooltip:AddLine(line);
+			if showFull then
+				GameTooltip:AddLine("------------");
+				for _,line in pairs(lines) do
+					GameTooltip:AddLine(line);
+				end
 			end
 		end
 
@@ -621,6 +660,14 @@ local ButtonMixin = {
 		end
 	end,
 
+	SetupFontStringFont = function(self, fs, optionsKey)
+		local fnt, hght, flags = fs:GetFont();
+		fnt = A.GetDefaultValue('button', optionsKey .. 'TextFont', self.item, SHM:Fetch("font", "Play-Bold"), fnt);
+		hght = A.GetDefaultValue('button', optionsKey .. 'TextSize', self.item, hght);
+		flags = flags or "THICKOUTLINE";
+		fs:SetFont(fnt, hght, flags);
+	end,
+
 	UpdateButtonFrame = function (self)
 		local button = self.item;
 		if (not button) then return end;
@@ -628,16 +675,19 @@ local ButtonMixin = {
 		local frame = self:GetButtonFrame();		
 		if (not frame) then return end;
 
-		local fnt, hght = frame.HotKey:GetFont();
+		self:SetupFontStringFont(frame.HotKey, 'hotKey');
 		frame.HotKey:SetTextColor(0,1,1,1);
-		fnt = A.GetDefaultValue('button', 'hotkeyTextFont', self.item, fnt);
-		hght = A.GetDefaultValue('button', 'hotkeyTextSize', self.item, hght);
-		frame.HotKey:SetFont(fnt,hght, "THICKOUTLINE");
+		-- local fnt, hght = frame.HotKey:GetFont();
+		-- fnt = A.GetDefaultValue('button', 'hotkeyTextFont', self.item, fnt);
+		-- hght = A.GetDefaultValue('button', 'hotkeyTextSize', self.item, hght);
+		-- frame.HotKey:SetFont(fnt,hght, "THICKOUTLINE");
 
-		local fnt, hght = frame.Count:GetFont();
-		fnt = A.GetDefaultValue('button', 'countTextFont', self.item, fnt);
-		hght = A.GetDefaultValue('button', 'countTextSize', self.item, hght);
-		frame.Count:SetFont(fnt, hght, "THICKOUTLINE");
+		self:SetupFontStringFont(frame.Count, 'count');
+		-- local fnt, hght, flags = frame.Count:GetFont();
+		-- fnt = A.GetDefaultValue('button', 'countTextFont', self.item, fnt);
+		-- hght = A.GetDefaultValue('button', 'countTextSize', self.item, hght);
+		-- flags = flags or "THICKOUTLINE";
+		-- frame.Count:SetFont(fnt, hght, flags);
 
 
 		-- local showed = self:CheckShowCondition();
@@ -1310,14 +1360,25 @@ A.Button.BuildAttributes = function(thingType, thingId, debug)
 		if (not spellId) then
 			spellId = select(2, GetSpellBookItemInfo(thingId, BOOKTYPE_SPELL));
 		end
+
 		if (type(spellId) == "number") then
-			info = _.GetSpellInfoTable(spellId);
+
+			info = _.GetSpellInfoTable(spellId, true);
+
+			if isRealButton and not info then
+				info = _.GetSpellInfoTable(btnInfo.name);
+			end
+
 		elseif (isRealButton) then
 			info = _.cloneTable(btnInfo);
 		else
 			info = {
 				name = thingId
 			}
+		end
+
+		if isRealButton and not info then
+			return A.Button.Empty();
 		end
 
 		return {
@@ -1371,6 +1432,7 @@ A.Button.BuildAttributes = function(thingType, thingId, debug)
 		local sb = A.SButton.GetButtonProto(thingId);
 		return sb;
 	end
+
 	print("MISSING CASE", thingType, thingId);
 
 end
